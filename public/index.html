@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ancient Board Games - Play Ur, Senet, Hnefatafl, Morris, Mancala Online Free</title>
+    <meta name="description" content="Play ancient board games online for free! Multiplayer &amp; AI opponents. Royal Game of Ur, Senet, Hnefatafl, Nine Men's Morris, Mancala. 5000-year-old games with rankings, history &amp; strategy guides.">
+    <meta name="keywords" content="ancient board games, play royal game of ur online free, senet online multiplayer, hnefatafl online, nine mens morris online, mancala online free, ancient games, historical board games, mesopotamian games, egyptian games">
+    <meta property="og:title" content="Ancient Board Games - Play 5000-Year-Old Games Online">
+    <meta property="og:description" content="Experience history through gameplay. Play the Royal Game of Ur, Senet, Hnefatafl, Morris &amp; Mancala online with friends or AI.">
+    <meta property="og:type" content="website">
+    <link rel="canonical" href="https://ancientboardgames.io">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
+    
+    <!-- Socket.io for multiplayer -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    
+    <!-- Stripe -->
+    <script src="https://js.stripe.com/v3/"></script>
+    
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <!-- Ambient particles background -->
+    <div id="particles-bg"></div>
+    
+    <!-- Main App Container -->
+    <div id="app">
+        <!-- Header -->
+        <header class="main-header">
+            <div class="header-content">
+                <div class="logo-section" onclick="navigateTo('home')">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 60 60" class="logo-svg">
+                            <defs>
+                                <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#D4AF37"/>
+                                    <stop offset="50%" style="stop-color:#FFD700"/>
+                                    <stop offset="100%" style="stop-color:#B8860B"/>
+                                </linearGradient>
+                            </defs>
+                            <circle cx="30" cy="30" r="28" fill="none" stroke="url(#goldGrad)" stroke-width="2"/>
+                            <path d="M15 20 L30 10 L45 20 L45 40 L30 50 L15 40 Z" fill="none" stroke="url(#goldGrad)" stroke-width="1.5"/>
+                            <circle cx="30" cy="30" r="8" fill="url(#goldGrad)" opacity="0.8"/>
+                            <circle cx="22" cy="22" r="3" fill="url(#goldGrad)" opacity="0.6"/>
+                            <circle cx="38" cy="22" r="3" fill="url(#goldGrad)" opacity="0.6"/>
+                            <circle cx="22" cy="38" r="3" fill="url(#goldGrad)" opacity="0.6"/>
+                            <circle cx="38" cy="38" r="3" fill="url(#goldGrad)" opacity="0.6"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">Ancient Games</span>
+                        <span class="logo-subtitle">Play History</span>
+                    </div>
+                </div>
+                
+                <nav class="main-nav">
+                    <button class="nav-btn" data-page="home">
+                        <span class="nav-icon">🏛️</span>
+                        <span class="nav-label">Home</span>
+                    </button>
+                    <button class="nav-btn" data-page="games">
+                        <span class="nav-icon">🎮</span>
+                        <span class="nav-label">Games</span>
+                    </button>
+                    <button class="nav-btn" data-page="lobby">
+                        <span class="nav-icon">👥</span>
+                        <span class="nav-label">Lobby</span>
+                    </button>
+                    <button class="nav-btn" data-page="rankings">
+                        <span class="nav-icon">🏆</span>
+                        <span class="nav-label">Rankings</span>
+                    </button>
+                    <button class="nav-btn" data-page="shop">
+                        <span class="nav-icon">💎</span>
+                        <span class="nav-label">Shop</span>
+                    </button>
+                </nav>
+                
+                <div class="header-actions">
+                    <div class="view-toggle">
+                        <button class="view-btn active" data-view="desktop" title="Desktop View">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 14H3V4h18v10zm0-12H3a2 2 0 00-2 2v12a2 2 0 002 2h7l-2 3v1h8v-1l-2-3h7a2 2 0 002-2V4a2 2 0 00-2-2z"/></svg>
+                        </button>
+                        <button class="view-btn" data-view="mobile" title="Mobile View">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+                        </button>
+                    </div>
+                    <div class="user-section">
+                        <button id="auth-btn" class="auth-btn">
+                            <span class="auth-icon">👤</span>
+                            <span class="auth-text">Sign In</span>
+                        </button>
+                        <div id="user-info" class="user-info hidden">
+                            <img id="user-avatar" class="user-avatar" src="" alt="Avatar">
+                            <span id="user-name" class="user-name"></span>
+                            <div id="user-coins" class="user-coins">
+                                <span class="coin-icon">🪙</span>
+                                <span class="coin-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+            <!-- Home Page -->
+            <section id="page-home" class="page active">
+                <div class="hero-section">
+                    <div class="hero-bg">
+                        <div class="hero-pattern"></div>
+                    </div>
+                    <div class="hero-content">
+                        <h1 class="hero-title">
+                            <span class="title-line">Journey Through</span>
+                            <span class="title-line accent">5,000 Years</span>
+                            <span class="title-line">of Gaming</span>
+                        </h1>
+                        <p class="hero-subtitle">Play the same games as ancient kings, pharaohs, and Vikings. Challenge friends or AI in history's greatest board games.</p>
+                        <div class="hero-actions">
+                            <button class="btn-primary btn-large" onclick="navigateTo('games')">
+                                <span>Play Now</span>
+                                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                            </button>
+                            <button class="btn-secondary btn-large" onclick="navigateTo('lobby')">
+                                <span>Find Match</span>
+                            </button>
+                        </div>
+                        <div class="hero-stats">
+                            <div class="stat-item">
+                                <span class="stat-value" id="online-count">--</span>
+                                <span class="stat-label">Players Online</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="games-today">--</span>
+                                <span class="stat-label">Games Today</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">5</span>
+                                <span class="stat-label">Ancient Games</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Featured Games Grid -->
+                <div class="featured-games">
+                    <h2 class="section-title">Choose Your Era</h2>
+                    <div class="games-grid">
+                        <article class="game-card" data-game="ur">
+                            <div class="card-bg mesopotamia"></div>
+                            <div class="card-content">
+                                <div class="card-era">Mesopotamia • 2600 BCE</div>
+                                <h3 class="card-title">Royal Game of Ur</h3>
+                                <p class="card-desc">Race your pieces across the board in this 4,600-year-old game of strategy and luck.</p>
+                                <div class="card-meta">
+                                    <span class="meta-item"><span class="meta-icon">⏱</span> 15-30 min</span>
+                                    <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
+                                </div>
+                                <button class="card-btn" onclick="startQuickGame('ur')">Play Now</button>
+                            </div>
+                        </article>
+                        
+                        <article class="game-card" data-game="senet">
+                            <div class="card-bg egypt"></div>
+                            <div class="card-content">
+                                <div class="card-era">Egypt • 3100 BCE</div>
+                                <h3 class="card-title">Senet</h3>
+                                <p class="card-desc">The game of passing to the afterlife, found in Tutankhamun's tomb.</p>
+                                <div class="card-meta">
+                                    <span class="meta-item"><span class="meta-icon">⏱</span> 20-40 min</span>
+                                    <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
+                                </div>
+                                <button class="card-btn" onclick="startQuickGame('senet')">Play Now</button>
+                            </div>
+                        </article>
+                        
+                        <article class="game-card" data-game="hnefatafl">
+                            <div class="card-bg viking"></div>
+                            <div class="card-content">
+                                <div class="card-era">Scandinavia • 400 CE</div>
+                                <h3 class="card-title">Hnefatafl</h3>
+                                <p class="card-desc">The Viking war game where the King must escape the attackers.</p>
+                                <div class="card-meta">
+                                    <span class="meta-item"><span class="meta-icon">⏱</span> 30-60 min</span>
+                                    <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
+                                </div>
+                                <button class="card-btn" onclick="startQuickGame('hnefatafl')">Play Now</button>
+                            </div>
+                        </article>
+                        
+                        <article class="game-card" data-game="morris">
+                            <div class="card-bg roman"></div>
+                            <div class="card-content">
+                                <div class="card-era">Roman Empire • 500 BCE</div>
+                                <h3 class="card-title">Nine Men's Morris</h3>
+                                <p class="card-desc">Form mills to capture your opponent's pieces in this strategic classic.</p>
+                                <div class="card-meta">
+                                    <span class="meta-item"><span class="meta-icon">⏱</span> 10-20 min</span>
+                                    <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
+                                </div>
+                                <button class="card-btn" onclick="startQuickGame('morris')">Play Now</button>
+                            </div>
+                        </article>
+                        
+                        <article class="game-card" data-game="mancala">
+                            <div class="card-bg african"></div>
+                            <div class="card-content">
+                                <div class="card-era">Africa • 700 CE</div>
+                                <h3 class="card-title">Mancala</h3>
+                                <p class="card-desc">Sow and capture seeds in this ancient counting and strategy game.</p>
+                                <div class="card-meta">
+                                    <span class="meta-item"><span class="meta-icon">⏱</span> 10-20 min</span>
+                                    <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
+                                </div>
+                                <button class="card-btn" onclick="startQuickGame('mancala')">Play Now</button>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+                
+                <!-- How It Works -->
+                <div class="how-it-works">
+                    <h2 class="section-title">How to Play</h2>
+                    <div class="steps-grid">
+                        <div class="step-card">
+                            <div class="step-number">1</div>
+                            <h3>Choose a Game</h3>
+                            <p>Select from 5 authentic ancient board games, each with rich history and unique mechanics.</p>
+                        </div>
+                        <div class="step-card">
+                            <div class="step-number">2</div>
+                            <h3>Pick Your Mode</h3>
+                            <p>Play against our AI opponents, challenge friends, or find ranked matches online.</p>
+                        </div>
+                        <div class="step-card">
+                            <div class="step-number">3</div>
+                            <h3>Climb the Ranks</h3>
+                            <p>Win games to earn rating points and compete on global leaderboards.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Games Selection Page -->
+            <section id="page-games" class="page">
+                <div class="page-header">
+                    <h1>Select a Game</h1>
+                    <p>Choose from five authentic ancient board games</p>
+                </div>
+                <div class="games-selection">
+                    <!-- Will be populated by JS -->
+                </div>
+            </section>
+
+            <!-- Game Play Page -->
+            <section id="page-play" class="page">
+                <div class="game-container">
+                    <div class="game-sidebar left">
+                        <div class="player-panel player-1">
+                            <div class="player-avatar"></div>
+                            <div class="player-info">
+                                <span class="player-name">Player 1</span>
+                                <span class="player-rating">--</span>
+                            </div>
+                            <div class="player-pieces"></div>
+                        </div>
+                        <div class="game-info-panel">
+                            <h3>Game Info</h3>
+                            <div id="game-status">Waiting to start...</div>
+                            <div id="turn-indicator"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-board-container">
+                        <canvas id="game-canvas"></canvas>
+                        <div id="dice-container" class="dice-container"></div>
+                    </div>
+                    
+                    <div class="game-sidebar right">
+                        <div class="player-panel player-2">
+                            <div class="player-avatar"></div>
+                            <div class="player-info">
+                                <span class="player-name">Player 2</span>
+                                <span class="player-rating">--</span>
+                            </div>
+                            <div class="player-pieces"></div>
+                        </div>
+                        <div class="game-controls">
+                            <button class="control-btn" id="roll-dice-btn">
+                                <span class="btn-icon">🎲</span>
+                                <span>Roll Dice</span>
+                            </button>
+                            <button class="control-btn" id="resign-btn">
+                                <span class="btn-icon">🏳️</span>
+                                <span>Resign</span>
+                            </button>
+                        </div>
+                        <div class="game-history">
+                            <h4>Move History</h4>
+                            <ul id="move-history"></ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Lobby Page -->
+            <section id="page-lobby" class="page">
+                <div class="page-header">
+                    <h1>Game Lobby</h1>
+                    <p>Create or join a game room</p>
+                </div>
+                <div class="lobby-container">
+                    <div class="lobby-create">
+                        <h3>Create Room</h3>
+                        <div class="form-group">
+                            <label>Game</label>
+                            <select id="lobby-game-select">
+                                <option value="ur">Royal Game of Ur</option>
+                                <option value="senet">Senet</option>
+                                <option value="hnefatafl">Hnefatafl</option>
+                                <option value="morris">Nine Men's Morris</option>
+                                <option value="mancala">Mancala</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Room Name</label>
+                            <input type="text" id="room-name-input" placeholder="My Ancient Game Room">
+                        </div>
+                        <div class="form-group">
+                            <label>Mode</label>
+                            <div class="toggle-group">
+                                <button class="toggle-btn active" data-mode="public">Public</button>
+                                <button class="toggle-btn" data-mode="private">Private</button>
+                            </div>
+                        </div>
+                        <button class="btn-primary" id="create-room-btn">Create Room</button>
+                    </div>
+                    
+                    <div class="lobby-rooms">
+                        <div class="rooms-header">
+                            <h3>Open Rooms</h3>
+                            <button class="refresh-btn" id="refresh-rooms">↻ Refresh</button>
+                        </div>
+                        <div class="rooms-filters">
+                            <button class="filter-btn active" data-filter="all">All Games</button>
+                            <button class="filter-btn" data-filter="ur">Ur</button>
+                            <button class="filter-btn" data-filter="senet">Senet</button>
+                            <button class="filter-btn" data-filter="hnefatafl">Hnefatafl</button>
+                            <button class="filter-btn" data-filter="morris">Morris</button>
+                            <button class="filter-btn" data-filter="mancala">Mancala</button>
+                        </div>
+                        <ul id="rooms-list" class="rooms-list">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                    
+                    <div class="quick-match">
+                        <h3>Quick Match</h3>
+                        <p>Find a random opponent instantly</p>
+                        <select id="quick-match-game">
+                            <option value="any">Any Game</option>
+                            <option value="ur">Royal Game of Ur</option>
+                            <option value="senet">Senet</option>
+                            <option value="hnefatafl">Hnefatafl</option>
+                            <option value="morris">Nine Men's Morris</option>
+                            <option value="mancala">Mancala</option>
+                        </select>
+                        <button class="btn-primary btn-large" id="quick-match-btn">
+                            <span class="loading-spinner hidden"></span>
+                            <span class="btn-text">Find Match</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rankings Page -->
+            <section id="page-rankings" class="page">
+                <div class="page-header">
+                    <h1>Leaderboards</h1>
+                    <p>Top players across all ancient games</p>
+                </div>
+                <div class="rankings-container">
+                    <div class="rankings-tabs">
+                        <button class="tab-btn active" data-game="overall">Overall</button>
+                        <button class="tab-btn" data-game="ur">Ur</button>
+                        <button class="tab-btn" data-game="senet">Senet</button>
+                        <button class="tab-btn" data-game="hnefatafl">Hnefatafl</button>
+                        <button class="tab-btn" data-game="morris">Morris</button>
+                        <button class="tab-btn" data-game="mancala">Mancala</button>
+                    </div>
+                    <div class="rankings-podium">
+                        <div class="podium-item second">
+                            <div class="podium-avatar"></div>
+                            <span class="podium-name">--</span>
+                            <span class="podium-rating">--</span>
+                            <div class="podium-stand">2</div>
+                        </div>
+                        <div class="podium-item first">
+                            <div class="podium-crown">👑</div>
+                            <div class="podium-avatar"></div>
+                            <span class="podium-name">--</span>
+                            <span class="podium-rating">--</span>
+                            <div class="podium-stand">1</div>
+                        </div>
+                        <div class="podium-item third">
+                            <div class="podium-avatar"></div>
+                            <span class="podium-name">--</span>
+                            <span class="podium-rating">--</span>
+                            <div class="podium-stand">3</div>
+                        </div>
+                    </div>
+                    <table class="rankings-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Player</th>
+                                <th>Rating</th>
+                                <th>W/L</th>
+                                <th>Win Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankings-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Shop Page -->
+            <section id="page-shop" class="page">
+                <div class="page-header">
+                    <h1>Shop</h1>
+                    <p>Customize your gaming experience</p>
+                </div>
+                <div class="shop-container">
+                    <div class="shop-sidebar">
+                        <div class="shop-balance">
+                            <span class="balance-label">Your Balance</span>
+                            <span class="balance-amount"><span class="coin-icon">🪙</span> <span id="shop-balance">0</span></span>
+                            <button class="btn-secondary" onclick="showBuyCoins()">Buy Coins</button>
+                        </div>
+                        <nav class="shop-nav">
+                            <button class="shop-nav-btn active" data-category="membership">
+                                <span class="nav-icon">⭐</span>
+                                <span>Membership</span>
+                            </button>
+                            <button class="shop-nav-btn" data-category="boards">
+                                <span class="nav-icon">🎨</span>
+                                <span>Board Skins</span>
+                            </button>
+                            <button class="shop-nav-btn" data-category="pieces">
+                                <span class="nav-icon">♟️</span>
+                                <span>Game Pieces</span>
+                            </button>
+                            <button class="shop-nav-btn" data-category="avatars">
+                                <span class="nav-icon">👤</span>
+                                <span>Avatars</span>
+                            </button>
+                            <button class="shop-nav-btn" data-category="coins">
+                                <span class="nav-icon">🪙</span>
+                                <span>Buy Coins</span>
+                            </button>
+                        </nav>
+                    </div>
+                    <div class="shop-content">
+                        <!-- Membership Section -->
+                        <div class="shop-section active" data-category="membership">
+                            <h2>Premium Membership</h2>
+                            <p class="section-desc">Remove ads, unlock all features, and get exclusive benefits</p>
+                            <div class="membership-cards">
+                                <div class="membership-card">
+                                    <div class="card-badge">Most Popular</div>
+                                    <h3>Monthly</h3>
+                                    <div class="price">$4.99<span>/month</span></div>
+                                    <ul class="features-list">
+                                        <li>✓ Ad-free gameplay</li>
+                                        <li>✓ All board skins unlocked</li>
+                                        <li>✓ Priority matchmaking</li>
+                                        <li>✓ 500 coins/month</li>
+                                        <li>✓ Exclusive avatar frames</li>
+                                    </ul>
+                                    <button class="btn-primary" onclick="subscribe('monthly')">Subscribe</button>
+                                </div>
+                                <div class="membership-card featured">
+                                    <div class="card-badge">Best Value</div>
+                                    <h3>Annual</h3>
+                                    <div class="price">$39.99<span>/year</span></div>
+                                    <div class="savings">Save 33%!</div>
+                                    <ul class="features-list">
+                                        <li>✓ Everything in Monthly</li>
+                                        <li>✓ 1000 bonus coins</li>
+                                        <li>✓ Exclusive ancient themes</li>
+                                        <li>✓ Early access to new games</li>
+                                        <li>✓ Custom profile badge</li>
+                                    </ul>
+                                    <button class="btn-primary" onclick="subscribe('annual')">Subscribe</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Board Skins Section -->
+                        <div class="shop-section" data-category="boards">
+                            <h2>Board Skins</h2>
+                            <div class="game-filter">
+                                <select id="board-game-filter">
+                                    <option value="all">All Games</option>
+                                    <option value="ur">Royal Game of Ur</option>
+                                    <option value="senet">Senet</option>
+                                    <option value="hnefatafl">Hnefatafl</option>
+                                    <option value="morris">Nine Men's Morris</option>
+                                    <option value="mancala">Mancala</option>
+                                </select>
+                            </div>
+                            <div class="shop-grid" id="boards-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        
+                        <!-- Pieces Section -->
+                        <div class="shop-section" data-category="pieces">
+                            <h2>Game Pieces</h2>
+                            <div class="shop-grid" id="pieces-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        
+                        <!-- Avatars Section -->
+                        <div class="shop-section" data-category="avatars">
+                            <h2>Avatars</h2>
+                            <div class="shop-grid" id="avatars-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        
+                        <!-- Buy Coins Section -->
+                        <div class="shop-section" data-category="coins">
+                            <h2>Buy Coins</h2>
+                            <p class="section-desc">Coins can be used to purchase cosmetic items</p>
+                            <div class="coins-grid">
+                                <div class="coin-package" onclick="buyCoins(100)">
+                                    <div class="coin-amount">🪙 100</div>
+                                    <div class="coin-price">$0.99</div>
+                                </div>
+                                <div class="coin-package" onclick="buyCoins(500)">
+                                    <div class="coin-amount">🪙 500</div>
+                                    <div class="coin-price">$3.99</div>
+                                    <div class="coin-bonus">+50 Bonus!</div>
+                                </div>
+                                <div class="coin-package popular" onclick="buyCoins(1000)">
+                                    <div class="package-badge">Popular</div>
+                                    <div class="coin-amount">🪙 1,000</div>
+                                    <div class="coin-price">$6.99</div>
+                                    <div class="coin-bonus">+200 Bonus!</div>
+                                </div>
+                                <div class="coin-package" onclick="buyCoins(2500)">
+                                    <div class="coin-amount">🪙 2,500</div>
+                                    <div class="coin-price">$14.99</div>
+                                    <div class="coin-bonus">+750 Bonus!</div>
+                                </div>
+                                <div class="coin-package best-value" onclick="buyCoins(5000)">
+                                    <div class="package-badge">Best Value</div>
+                                    <div class="coin-amount">🪙 5,000</div>
+                                    <div class="coin-price">$24.99</div>
+                                    <div class="coin-bonus">+2,000 Bonus!</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Game Info/Rules Modal -->
+            <div id="game-info-modal" class="modal">
+                <div class="modal-content large">
+                    <button class="modal-close">&times;</button>
+                    <div id="game-info-content">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auth Modal -->
+            <div id="auth-modal" class="modal">
+                <div class="modal-content">
+                    <button class="modal-close">&times;</button>
+                    <h2>Sign In</h2>
+                    <p>Sign in to save your progress, compete in rankings, and play with friends.</p>
+                    <div class="auth-buttons">
+                        <button class="auth-provider google" onclick="signInWithGoogle()">
+                            <svg viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                            </svg>
+                            <span>Continue with Google</span>
+                        </button>
+                        <button class="auth-provider guest" onclick="playAsGuest()">
+                            <span class="guest-icon">👤</span>
+                            <span>Play as Guest</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game End Modal -->
+            <div id="game-end-modal" class="modal">
+                <div class="modal-content">
+                    <div id="game-end-content">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="main-footer">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#" onclick="showGameInfo('about')">About</a>
+                    <a href="#" onclick="showGameInfo('rules')">Rules</a>
+                    <a href="#" onclick="showGameInfo('history')">History</a>
+                    <a href="#" onclick="showGameInfo('faq')">FAQ</a>
+                    <a href="#" onclick="showGameInfo('privacy')">Privacy</a>
+                    <a href="#" onclick="showGameInfo('terms')">Terms</a>
+                </div>
+                <div class="footer-social">
+                    <a href="#" class="social-link">Discord</a>
+                    <a href="#" class="social-link">Twitter</a>
+                    <a href="#" class="social-link">Reddit</a>
+                </div>
+                <div class="footer-copy">
+                    <p>&copy; 2025 Ancient Board Games. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/js/config.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/games/ur.js"></script>
+    <script src="/js/games/senet.js"></script>
+    <script src="/js/games/hnefatafl.js"></script>
+    <script src="/js/games/morris.js"></script>
+    <script src="/js/games/mancala.js"></script>
+    <script src="/js/ai.js"></script>
+    <script src="/js/multiplayer.js"></script>
+    <script src="/js/shop.js"></script>
+    <script src="/js/main.js"></script>
+</body>
+</html>

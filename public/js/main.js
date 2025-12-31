@@ -1,0 +1,764 @@
+// ============================================
+// ANCIENT BOARD GAMES - MAIN APPLICATION
+// ============================================
+
+// Global state
+let currentGame = null;
+let currentPage = 'home';
+let socket = null;
+
+// Game class mapping
+const GameClasses = {
+    ur: UrGame,
+    senet: SenetGame,
+    hnefatafl: HnefataflGame,
+    morris: MorrisGame,
+    mancala: MancalaGame
+};
+
+// Initialize application
+document.addEventListener('DOMContentLoaded', () => {
+    initNavigation();
+    initModals();
+    initViewToggle();
+    initShop();
+    initSocket();
+    updateStats();
+    
+    // Check for URL parameters
+    const gameParam = Utils.getQueryParam('game');
+    const roomParam = Utils.getQueryParam('room');
+    
+    if (gameParam && GameClasses[gameParam]) {
+        startQuickGame(gameParam);
+    } else if (roomParam) {
+        joinRoom(roomParam);
+    }
+});
+
+// Navigation
+function initNavigation() {
+    const navBtns = Utils.$$('.nav-btn');
+    navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = btn.dataset.page;
+            navigateTo(page);
+        });
+    });
+}
+
+function navigateTo(page) {
+    // Hide all pages
+    Utils.$$('.page').forEach(p => p.classList.remove('active'));
+    
+    // Show target page
+    const targetPage = Utils.$(`#page-${page}`);
+    if (targetPage) {
+        targetPage.classList.add('active');
+    }
+    
+    // Update nav buttons
+    Utils.$$('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.page === page);
+    });
+    
+    currentPage = page;
+    
+    // Page-specific initialization
+    if (page === 'games') {
+        renderGamesSelection();
+    } else if (page === 'rankings') {
+        loadRankings();
+    } else if (page === 'lobby') {
+        loadRooms();
+    }
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+}
+
+// Games selection page
+function renderGamesSelection() {
+    const container = Utils.$('.games-selection');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    Object.entries(CONFIG.games).forEach(([key, game]) => {
+        const card = Utils.createElement('div', { class: 'game-select-card', dataset: { game: key } }, [
+            Utils.createElement('div', { class: 'game-select-header' }, [
+                Utils.createElement('h3', {}, [game.name]),
+                Utils.createElement('span', { class: 'game-era' }, [game.era])
+            ]),
+            Utils.createElement('p', {}, [game.description]),
+            Utils.createElement('div', { class: 'game-select-actions' }, [
+                Utils.createElement('button', { 
+                    class: 'btn-primary',
+                    onClick: () => startQuickGame(key)
+                }, ['Play vs AI']),
+                Utils.createElement('button', { 
+                    class: 'btn-secondary',
+                    onClick: () => {
+                        Utils.$('#lobby-game-select').value = key;
+                        navigateTo('lobby');
+                    }
+                }, ['Find Match']),
+                Utils.createElement('button', { 
+                    class: 'btn-secondary',
+                    onClick: () => showGameInfo(key)
+                }, ['Rules & History'])
+            ])
+        ]);
+        container.appendChild(card);
+    });
+}
+
+// Start a quick game against AI
+function startQuickGame(gameKey) {
+    const GameClass = GameClasses[gameKey];
+    if (!GameClass) {
+        Utils.toast('Game not found', 'error');
+        return;
+    }
+    
+    // Navigate to play page
+    navigateTo('play');
+    
+    // Get canvas
+    const canvas = Utils.$('#game-canvas');
+    if (!canvas) return;
+    
+    // Destroy existing game
+    if (currentGame) {
+        currentGame.destroy();
+    }
+    
+    // Set canvas size based on game
+    const gameConfig = CONFIG.games[gameKey];
+    canvas.width = gameConfig.boardSize.width;
+    canvas.height = gameConfig.boardSize.height;
+    
+    // Create new game
+    currentGame = new GameClass(canvas, {
+        mode: 'ai',
+        aiDifficulty: 'medium',
+        playerSide: 1
+    });
+    
+    window.currentGame = currentGame;
+    
+    // Update UI
+    Utils.$('#game-status').textContent = `Playing: ${gameConfig.name}`;
+    updateTurnIndicator();
+    
+    // Setup dice button
+    const diceBtn = Utils.$('#roll-dice-btn');
+    if (diceBtn) {
+        diceBtn.onclick = () => {
+            if (currentGame && currentGame.rollDice) {
+                currentGame.rollDice();
+            }
+        };
+    }
+    
+    // Setup resign button
+    const resignBtn = Utils.$('#resign-btn');
+    if (resignBtn) {
+        resignBtn.onclick = () => {
+            if (confirm('Are you sure you want to resign?')) {
+                if (currentGame) {
+                    currentGame.gameOver = true;
+                    currentGame.winner = currentGame.currentPlayer === 1 ? 2 : 1;
+                    currentGame.onGameEnd(currentGame.winner);
+                }
+            }
+        };
+    }
+    
+    Utils.toast(`Starting ${gameConfig.name}`, 'success');
+}
+
+function updateTurnIndicator() {
+    const indicator = Utils.$('#turn-indicator');
+    if (!indicator || !currentGame) return;
+    
+    const isYourTurn = currentGame.options.mode !== 'ai' || 
+                       currentGame.currentPlayer === currentGame.options.playerSide;
+    
+    indicator.className = isYourTurn ? 'your-turn' : 'opponent-turn';
+    indicator.textContent = isYourTurn ? 'Your Turn' : "Opponent's Turn";
+}
+
+// Show game info modal
+function showGameInfo(gameKey) {
+    const game = CONFIG.games[gameKey];
+    if (!game) return;
+    
+    const content = Utils.$('#game-info-content');
+    if (!content) return;
+    
+    content.innerHTML = `
+        <h2>${game.name}</h2>
+        <p class="game-era">${game.era}</p>
+        <p>${game.description}</p>
+        
+        <div class="game-info-tabs">
+            <button class="tab-btn active" onclick="showInfoTab('rules', '${gameKey}')">Rules</button>
+            <button class="tab-btn" onclick="showInfoTab('history', '${gameKey}')">History</button>
+        </div>
+        
+        <div id="info-tab-content">
+            ${game.rules}
+        </div>
+        
+        <div class="game-info-actions">
+            <button class="btn-primary" onclick="Utils.hideModal('game-info-modal'); startQuickGame('${gameKey}');">
+                Play Now
+            </button>
+        </div>
+    `;
+    
+    Utils.showModal('game-info-modal');
+}
+
+function showInfoTab(tab, gameKey) {
+    const game = CONFIG.games[gameKey];
+    if (!game) return;
+    
+    const content = Utils.$('#info-tab-content');
+    if (!content) return;
+    
+    content.innerHTML = tab === 'rules' ? game.rules : game.history;
+    
+    // Update tab buttons
+    Utils.$$('.game-info-tabs .tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.toLowerCase() === tab);
+    });
+}
+
+// Modals
+function initModals() {
+    // Close buttons
+    Utils.$$('.modal-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = btn.closest('.modal');
+            if (modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    });
+    
+    // Click outside to close
+    Utils.$$('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    });
+    
+    // Auth button
+    const authBtn = Utils.$('#auth-btn');
+    if (authBtn) {
+        authBtn.addEventListener('click', () => {
+            Utils.showModal('auth-modal');
+        });
+    }
+}
+
+// View toggle (desktop/mobile)
+function initViewToggle() {
+    const viewBtns = Utils.$$('.view-btn');
+    viewBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            
+            viewBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            document.body.classList.remove('desktop-view', 'mobile-view');
+            document.body.classList.add(`${view}-view`);
+            
+            // Re-render current game if exists
+            if (currentGame) {
+                currentGame.render();
+            }
+        });
+    });
+}
+
+// Shop
+function initShop() {
+    // Category navigation
+    Utils.$$('.shop-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+            
+            Utils.$$('.shop-nav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            Utils.$$('.shop-section').forEach(sec => {
+                sec.classList.toggle('active', sec.dataset.category === category);
+            });
+        });
+    });
+    
+    // Load shop items
+    loadShopItems();
+}
+
+function loadShopItems() {
+    // Board skins
+    const boardsGrid = Utils.$('#boards-grid');
+    if (boardsGrid) {
+        boardsGrid.innerHTML = '';
+        CONFIG.shopItems.boards.forEach(item => {
+            boardsGrid.appendChild(createShopItemCard(item, 'board'));
+        });
+    }
+    
+    // Pieces
+    const piecesGrid = Utils.$('#pieces-grid');
+    if (piecesGrid) {
+        piecesGrid.innerHTML = '';
+        CONFIG.shopItems.pieces.forEach(item => {
+            piecesGrid.appendChild(createShopItemCard(item, 'piece'));
+        });
+    }
+    
+    // Avatars
+    const avatarsGrid = Utils.$('#avatars-grid');
+    if (avatarsGrid) {
+        avatarsGrid.innerHTML = '';
+        CONFIG.shopItems.avatars.forEach(item => {
+            avatarsGrid.appendChild(createShopItemCard(item, 'avatar'));
+        });
+    }
+}
+
+function createShopItemCard(item, type) {
+    const owned = Auth.ownsItem(item.id);
+    
+    return Utils.createElement('div', { class: `shop-item ${owned ? 'owned' : ''}` }, [
+        Utils.createElement('div', { class: 'item-preview' }, [item.preview]),
+        Utils.createElement('h4', {}, [item.name]),
+        Utils.createElement('div', { class: 'item-price' }, [
+            owned ? 'Owned' : `🪙 ${item.price}`
+        ]),
+        owned ? 
+            Utils.createElement('button', { class: 'btn-secondary', onClick: () => equipItem(item.id, type) }, ['Equip']) :
+            Utils.createElement('button', { class: 'btn-primary', onClick: () => purchaseItem(item) }, ['Buy'])
+    ]);
+}
+
+async function purchaseItem(item) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    if (Auth.ownsItem(item.id)) {
+        Utils.toast('You already own this item', 'info');
+        return;
+    }
+    
+    const success = await Auth.spendCoins(item.price);
+    if (success) {
+        await Auth.addToInventory(item.id);
+        Utils.toast(`Purchased ${item.name}!`, 'success');
+        loadShopItems();
+    } else {
+        Utils.toast('Not enough coins', 'error');
+    }
+}
+
+function equipItem(itemId, type) {
+    Utils.toast(`Equipped ${itemId}`, 'success');
+    // In a full implementation, this would update user preferences
+}
+
+// Subscriptions
+async function subscribe(plan) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const price = plan === 'monthly' ? CONFIG.pricing.membership.monthly : CONFIG.pricing.membership.annual;
+    
+    try {
+        // In production, this would create a Stripe checkout session
+        Utils.toast('Redirecting to checkout...', 'info');
+        
+        // Simulated for demo
+        const response = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                plan, 
+                price,
+                userId: Auth.user.uid 
+            })
+        });
+        
+        if (response.ok) {
+            const { sessionId } = await response.json();
+            const stripe = Stripe(CONFIG.stripe.publicKey);
+            await stripe.redirectToCheckout({ sessionId });
+        }
+    } catch (error) {
+        console.error('Subscription error:', error);
+        Utils.toast('Unable to process subscription. Please try again.', 'error');
+    }
+}
+
+async function buyCoins(amount) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const price = CONFIG.pricing.coins[amount];
+    const bonus = CONFIG.pricing.bonusCoins[amount];
+    
+    try {
+        Utils.toast('Redirecting to checkout...', 'info');
+        
+        const response = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                type: 'coins',
+                amount: amount + bonus,
+                price,
+                userId: Auth.user.uid 
+            })
+        });
+        
+        if (response.ok) {
+            const { sessionId } = await response.json();
+            const stripe = Stripe(CONFIG.stripe.publicKey);
+            await stripe.redirectToCheckout({ sessionId });
+        }
+    } catch (error) {
+        console.error('Purchase error:', error);
+        Utils.toast('Unable to process purchase. Please try again.', 'error');
+    }
+}
+
+// Lobby and Multiplayer
+function initSocket() {
+    try {
+        socket = io(CONFIG.socketUrl, {
+            transports: ['websocket'],
+            reconnection: true
+        });
+        
+        socket.on('connect', () => {
+            console.log('Connected to game server');
+            updateOnlineCount();
+        });
+        
+        socket.on('room-created', (data) => {
+            Utils.toast('Room created! Share the link with a friend.', 'success');
+            Utils.copyToClipboard(window.location.origin + '?room=' + data.roomId);
+        });
+        
+        socket.on('player-joined', (data) => {
+            Utils.toast(`${data.playerName} joined the room!`, 'info');
+        });
+        
+        socket.on('game-start', (data) => {
+            startMultiplayerGame(data);
+        });
+        
+        socket.on('opponent-move', (data) => {
+            if (currentGame) {
+                // Handle opponent's move
+                currentGame.makeMove(data.move);
+            }
+        });
+        
+        socket.on('opponent-left', () => {
+            Utils.toast('Opponent left the game', 'warning');
+            if (currentGame) {
+                currentGame.gameOver = true;
+            }
+        });
+        
+        socket.on('stats-update', (data) => {
+            Utils.$('#online-count').textContent = data.online || '--';
+            Utils.$('#games-today').textContent = data.gamesToday || '--';
+        });
+        
+    } catch (error) {
+        console.error('Socket connection error:', error);
+    }
+}
+
+function updateOnlineCount() {
+    if (socket && socket.connected) {
+        socket.emit('get-stats');
+    }
+}
+
+function loadRooms() {
+    const roomsList = Utils.$('#rooms-list');
+    if (!roomsList) return;
+    
+    // In production, this would fetch from the server
+    roomsList.innerHTML = '<li class="empty-state">No open rooms. Create one!</li>';
+    
+    if (socket && socket.connected) {
+        socket.emit('get-rooms');
+        
+        socket.once('rooms-list', (rooms) => {
+            if (rooms.length === 0) {
+                roomsList.innerHTML = '<li class="empty-state">No open rooms. Create one!</li>';
+                return;
+            }
+            
+            roomsList.innerHTML = '';
+            rooms.forEach(room => {
+                const li = Utils.createElement('li', {}, [
+                    Utils.createElement('div', { class: 'room-info' }, [
+                        Utils.createElement('span', { class: 'room-name' }, [room.name]),
+                        Utils.createElement('span', { class: 'room-game' }, [CONFIG.games[room.game]?.name || room.game])
+                    ]),
+                    Utils.createElement('button', { 
+                        class: 'btn-primary btn-small',
+                        onClick: () => joinRoom(room.id)
+                    }, ['Join'])
+                ]);
+                roomsList.appendChild(li);
+            });
+        });
+    }
+}
+
+function createRoom() {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const game = Utils.$('#lobby-game-select').value;
+    const name = Utils.$('#room-name-input').value || `${Auth.user.displayName}'s Room`;
+    const isPrivate = Utils.$('.toggle-btn.active')?.dataset.mode === 'private';
+    
+    if (socket && socket.connected) {
+        socket.emit('create-room', {
+            game,
+            name,
+            isPrivate,
+            hostId: Auth.user.uid,
+            hostName: Auth.user.displayName
+        });
+    } else {
+        Utils.toast('Not connected to server', 'error');
+    }
+}
+
+function joinRoom(roomId) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    if (socket && socket.connected) {
+        socket.emit('join-room', {
+            roomId,
+            playerId: Auth.user.uid,
+            playerName: Auth.user.displayName
+        });
+    }
+}
+
+function startMultiplayerGame(data) {
+    navigateTo('play');
+    
+    const canvas = Utils.$('#game-canvas');
+    const GameClass = GameClasses[data.game];
+    
+    if (currentGame) {
+        currentGame.destroy();
+    }
+    
+    const gameConfig = CONFIG.games[data.game];
+    canvas.width = gameConfig.boardSize.width;
+    canvas.height = gameConfig.boardSize.height;
+    
+    currentGame = new GameClass(canvas, {
+        mode: 'online',
+        playerSide: data.playerSide,
+        roomId: data.roomId
+    });
+    
+    window.currentGame = currentGame;
+}
+
+// Quick match
+function findQuickMatch() {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const game = Utils.$('#quick-match-game').value;
+    const btn = Utils.$('#quick-match-btn');
+    const spinner = btn.querySelector('.loading-spinner');
+    const text = btn.querySelector('.btn-text');
+    
+    spinner.classList.remove('hidden');
+    text.textContent = 'Searching...';
+    
+    if (socket && socket.connected) {
+        socket.emit('find-match', {
+            game: game === 'any' ? null : game,
+            playerId: Auth.user.uid,
+            playerName: Auth.user.displayName,
+            rating: Auth.getRating(game)
+        });
+        
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            spinner.classList.add('hidden');
+            text.textContent = 'Find Match';
+        }, 30000);
+    }
+}
+
+// Rankings
+async function loadRankings(game = 'overall') {
+    const tbody = Utils.$('#rankings-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+    
+    try {
+        // In production, fetch from Firebase
+        const db = firebase.database();
+        let query;
+        
+        if (game === 'overall') {
+            query = db.ref('users').orderByChild('stats/gamesWon').limitToLast(50);
+        } else {
+            query = db.ref('users').orderByChild(`ratings/${game}`).limitToLast(50);
+        }
+        
+        const snapshot = await query.once('value');
+        const users = [];
+        
+        snapshot.forEach(child => {
+            const data = child.val();
+            users.push({
+                name: data.displayName,
+                rating: game === 'overall' ? 
+                    Math.round(Object.values(data.ratings || {}).reduce((a, b) => a + b, 0) / 5) :
+                    data.ratings?.[game] || 1200,
+                wins: data.stats?.gamesWon || 0,
+                losses: data.stats?.gamesLost || 0
+            });
+        });
+        
+        // Sort and display
+        users.sort((a, b) => b.rating - a.rating);
+        
+        tbody.innerHTML = '';
+        users.slice(0, 50).forEach((user, index) => {
+            const winRate = user.wins + user.losses > 0 ?
+                Math.round((user.wins / (user.wins + user.losses)) * 100) : 0;
+            
+            const tr = Utils.createElement('tr', {}, [
+                Utils.createElement('td', {}, [`#${index + 1}`]),
+                Utils.createElement('td', {}, [user.name]),
+                Utils.createElement('td', {}, [user.rating.toString()]),
+                Utils.createElement('td', {}, [`${user.wins}/${user.losses}`]),
+                Utils.createElement('td', {}, [`${winRate}%`])
+            ]);
+            tbody.appendChild(tr);
+        });
+        
+        // Update podium
+        updatePodium(users.slice(0, 3));
+        
+    } catch (error) {
+        console.error('Load rankings error:', error);
+        tbody.innerHTML = '<tr><td colspan="5">Failed to load rankings</td></tr>';
+    }
+}
+
+function updatePodium(topThree) {
+    const positions = ['first', 'second', 'third'];
+    
+    topThree.forEach((user, index) => {
+        const podiumItem = Utils.$(`.podium-item.${positions[index]}`);
+        if (podiumItem) {
+            podiumItem.querySelector('.podium-name').textContent = user?.name || '--';
+            podiumItem.querySelector('.podium-rating').textContent = user?.rating || '--';
+        }
+    });
+}
+
+// Rankings tabs
+Utils.$$('.rankings-tabs .tab-btn')?.forEach(btn => {
+    btn.addEventListener('click', () => {
+        Utils.$$('.rankings-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadRankings(btn.dataset.game);
+    });
+});
+
+// Update stats periodically
+function updateStats() {
+    setInterval(updateOnlineCount, 30000);
+}
+
+// Filter buttons in lobby
+Utils.$$('.filter-btn')?.forEach(btn => {
+    btn.addEventListener('click', () => {
+        Utils.$$('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Filter rooms by game type
+    });
+});
+
+// Toggle buttons
+Utils.$$('.toggle-btn')?.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const group = btn.parentElement;
+        group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+// Global functions for HTML onclick handlers
+window.navigateTo = navigateTo;
+window.startQuickGame = startQuickGame;
+window.showGameInfo = showGameInfo;
+window.showInfoTab = showInfoTab;
+window.subscribe = subscribe;
+window.buyCoins = buyCoins;
+window.createRoom = createRoom;
+window.joinRoom = joinRoom;
+window.findQuickMatch = findQuickMatch;
+
+// Event handlers for lobby buttons
+document.addEventListener('DOMContentLoaded', () => {
+    const createRoomBtn = Utils.$('#create-room-btn');
+    if (createRoomBtn) {
+        createRoomBtn.addEventListener('click', createRoom);
+    }
+    
+    const quickMatchBtn = Utils.$('#quick-match-btn');
+    if (quickMatchBtn) {
+        quickMatchBtn.addEventListener('click', findQuickMatch);
+    }
+    
+    const refreshRoomsBtn = Utils.$('#refresh-rooms');
+    if (refreshRoomsBtn) {
+        refreshRoomsBtn.addEventListener('click', loadRooms);
+    }
+});
