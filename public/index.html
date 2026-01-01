@@ -10,15 +10,6 @@
     <meta property="og:description" content="Experience history through gameplay. Play the Royal Game of Ur, Senet, Hnefatafl, Morris &amp; Mancala online with friends or AI.">
     <meta property="og:type" content="website">
     <link rel="canonical" href="https://ancientboardgames.io">
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4303012098587214" crossorigin="anonymous"></script>
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-E2C7HB1DCK"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-E2C7HB1DCK');
-</script>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -177,7 +168,7 @@
                                     <span class="meta-item"><span class="meta-icon">⏱</span> 15-30 min</span>
                                     <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
                                 </div>
-                                <button class="card-btn" onclick="startQuickGame('ur')">Play Now</button>
+                                <button class="card-btn" onclick="showDifficultyModal('ur')">Play Now</button>
                             </div>
                         </article>
                         
@@ -191,7 +182,7 @@
                                     <span class="meta-item"><span class="meta-icon">⏱</span> 20-40 min</span>
                                     <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
                                 </div>
-                                <button class="card-btn" onclick="startQuickGame('senet')">Play Now</button>
+                                <button class="card-btn" onclick="showDifficultyModal('senet')">Play Now</button>
                             </div>
                         </article>
                         
@@ -205,7 +196,7 @@
                                     <span class="meta-item"><span class="meta-icon">⏱</span> 30-60 min</span>
                                     <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
                                 </div>
-                                <button class="card-btn" onclick="startQuickGame('hnefatafl')">Play Now</button>
+                                <button class="card-btn" onclick="showDifficultyModal('hnefatafl')">Play Now</button>
                             </div>
                         </article>
                         
@@ -219,7 +210,7 @@
                                     <span class="meta-item"><span class="meta-icon">⏱</span> 10-20 min</span>
                                     <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
                                 </div>
-                                <button class="card-btn" onclick="startQuickGame('morris')">Play Now</button>
+                                <button class="card-btn" onclick="showDifficultyModal('morris')">Play Now</button>
                             </div>
                         </article>
                         
@@ -233,7 +224,7 @@
                                     <span class="meta-item"><span class="meta-icon">⏱</span> 10-20 min</span>
                                     <span class="meta-item"><span class="meta-icon">👥</span> 2 players</span>
                                 </div>
-                                <button class="card-btn" onclick="startQuickGame('mancala')">Play Now</button>
+                                <button class="card-btn" onclick="showDifficultyModal('mancala')">Play Now</button>
                             </div>
                         </article>
                     </div>
@@ -632,16 +623,26 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Difficulty Selection Modal -->
+            <div id="difficulty-modal" class="modal">
+                <div class="modal-content">
+                    <button class="modal-close">&times;</button>
+                    <div id="difficulty-modal-content">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Footer -->
         <footer class="main-footer">
             <div class="footer-content">
                 <div class="footer-links">
-                    <a href="#" onclick="showGameInfo('about')">About</a>
-                    <a href="#" onclick="showGameInfo('rules')">Rules</a>
-                    <a href="#" onclick="showGameInfo('history')">History</a>
-                    <a href="#" onclick="showGameInfo('faq')">FAQ</a>
+                    <a href="#" onclick="showGameInfo('about'); return false;">About</a>
+                    <a href="#" onclick="showGameInfo('rules'); return false;">Rules</a>
+                    <a href="#" onclick="showGameInfo('history'); return false;">History</a>
+                    <a href="#" onclick="showGameInfo('faq'); return false;">FAQ</a>
                     <a href="/privacy.html">Privacy</a>
                     <a href="/terms.html">Terms</a>
                 </div>
