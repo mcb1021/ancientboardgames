@@ -302,6 +302,10 @@
                                 <span class="btn-icon">🎲</span>
                                 <span>Roll Dice</span>
                             </button>
+                            <button class="control-btn" id="rules-btn">
+                                <span class="btn-icon">📜</span>
+                                <span>Rules</span>
+                            </button>
                             <button class="control-btn" id="resign-btn">
                                 <span class="btn-icon">🏳️</span>
                                 <span>Resign</span>
@@ -629,6 +633,16 @@
                 <div class="modal-content">
                     <button class="modal-close">&times;</button>
                     <div id="difficulty-modal-content">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rules Modal (in-game) -->
+            <div id="rules-modal" class="modal">
+                <div class="modal-content large">
+                    <button class="modal-close">&times;</button>
+                    <div id="rules-modal-content">
                         <!-- Populated by JS -->
                     </div>
                 </div>
