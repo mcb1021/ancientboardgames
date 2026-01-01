@@ -28,7 +28,9 @@ class HnefataflGame {
         };
         
         this.reset();
-        this.canvas.addEventListener('click', this.handleClick.bind(this));
+        this.boundHandleClick = this.handleClick.bind(this);
+        this.canvas.addEventListener('click', this.boundHandleClick);
+        this.destroyed = false;
         this.render();
     }
     
@@ -423,7 +425,10 @@ class HnefataflGame {
     }
     
     destroy() {
-        this.canvas.removeEventListener('click', this.handleClick);
+        this.destroyed = true;
+        this.gameOver = true;
+        this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
 }
 

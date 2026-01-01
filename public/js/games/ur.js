@@ -40,13 +40,16 @@ class UrGame {
             validMove: 'rgba(212, 175, 55, 0.4)'
         };
         
-        // Bind events
-        this.canvas.addEventListener('click', this.handleClick.bind(this));
-        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
+        // Bind events - store references for removal
+        this.boundHandleClick = this.handleClick.bind(this);
+        this.boundHandleMouseMove = this.handleMouseMove.bind(this);
+        this.canvas.addEventListener('click', this.boundHandleClick);
+        this.canvas.addEventListener('mousemove', this.boundHandleMouseMove);
         
         // Animation state
         this.animating = false;
         this.hoverCell = null;
+        this.destroyed = false;
         
         // Start render loop
         this.render();
@@ -542,7 +545,7 @@ class UrGame {
         this.drawStartAreas();
         
         // Request next frame if animating
-        if (this.animating) {
+        if (this.animating && !this.destroyed) {
             requestAnimationFrame(() => this.render());
         }
     }
@@ -841,8 +844,13 @@ class UrGame {
     
     // Destroy game instance
     destroy() {
-        this.canvas.removeEventListener('click', this.handleClick);
-        this.canvas.removeEventListener('mousemove', this.handleMouseMove);
+        this.destroyed = true;
+        this.animating = false;
+        this.gameOver = true;
+        this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.canvas.removeEventListener('mousemove', this.boundHandleMouseMove);
+        // Clear canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
 }
 
