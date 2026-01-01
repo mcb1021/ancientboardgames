@@ -391,11 +391,28 @@ function loadShopItems() {
 function createShopItemCard(item, type) {
     const owned = Auth.ownsItem(item.id);
     
+    // Create CSS-based icon instead of emoji
+    const iconColors = {
+        // Boards
+        '🏆': '#D4AF37', '💎': '#4169E1', '🖤': '#2C2C2C', '👑': '#FFD700',
+        '📜': '#C9A86C', '⛵': '#8B4513', '🪨': '#708090', '🏛️': '#F5F5F5', '🪵': '#8B4513',
+        // Pieces
+        '🟢': '#2ECC71', '🟠': '#E67E22', '⚪': '#ECF0F1', '💠': '#3498DB', '🥉': '#CD7F32',
+        // Avatars
+        '⚔️': '#7F8C8D', '📚': '#9B59B6', '🐫': '#D4A574', '🔮': '#8E44AD', '🦅': '#C0392B'
+    };
+    
+    const iconColor = iconColors[item.preview] || '#D4AF37';
+    const iconEl = Utils.createElement('div', { 
+        class: 'item-icon',
+        style: { background: iconColor }
+    });
+    
     return Utils.createElement('div', { class: `shop-item ${owned ? 'owned' : ''}` }, [
-        Utils.createElement('div', { class: 'item-preview' }, [item.preview]),
+        Utils.createElement('div', { class: 'item-preview' }, [iconEl]),
         Utils.createElement('h4', {}, [item.name]),
         Utils.createElement('div', { class: 'item-price' }, [
-            owned ? 'Owned' : `🪙 ${item.price}`
+            owned ? 'Owned' : `${item.price} coins`
         ]),
         owned ? 
             Utils.createElement('button', { class: 'btn-secondary', onClick: () => equipItem(item.id, type) }, ['Equip']) :
