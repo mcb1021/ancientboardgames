@@ -1416,3 +1416,136 @@ a:hover { color: var(--color-gold-light); }
         width: 100%;
     }
 }
+
+/* ============================================
+   DIFFICULTY SELECTION MODAL
+   ============================================ */
+
+#difficulty-modal-content h2 {
+    font-family: var(--font-display);
+    color: var(--color-gold);
+    text-align: center;
+    margin-bottom: var(--space-sm);
+}
+
+#difficulty-modal-content p {
+    text-align: center;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-xl);
+}
+
+.difficulty-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.btn-difficulty {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    background: rgba(42, 31, 20, 0.8);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+}
+
+.btn-difficulty:hover {
+    border-color: var(--color-gold);
+    background: rgba(212, 175, 55, 0.1);
+    transform: translateX(5px);
+}
+
+.btn-difficulty.easy:hover { border-color: #7CB07F; }
+.btn-difficulty.medium:hover { border-color: var(--color-gold); }
+.btn-difficulty.hard:hover { border-color: #CD7F7F; }
+
+.diff-icon {
+    font-size: 2rem;
+    width: 50px;
+    text-align: center;
+}
+
+.diff-name {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+    display: block;
+}
+
+.diff-desc {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    display: block;
+}
+
+.btn-difficulty .diff-name,
+.btn-difficulty .diff-desc {
+    flex: 1;
+}
+
+@media (max-width: 480px) {
+    .btn-difficulty {
+        padding: var(--space-md);
+    }
+    
+    .diff-icon {
+        font-size: 1.5rem;
+        width: 40px;
+    }
+}
+
+/* ============================================
+   SHOP ITEM ICONS (CSS-based, no emoji)
+   ============================================ */
+
+.item-preview {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-md);
+}
+
+.item-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.3),
+        inset 0 2px 4px rgba(255, 255, 255, 0.2),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Board items - square shape */
+.shop-category[data-category="boards"] .item-icon {
+    border-radius: 8px;
+    width: 55px;
+    height: 40px;
+}
+
+/* Piece items - circle */
+.shop-category[data-category="pieces"] .item-icon {
+    border-radius: 50%;
+}
+
+/* Avatar items - rounded square */
+.shop-category[data-category="avatars"] .item-icon {
+    border-radius: 12px;
+    width: 45px;
+    height: 45px;
+}
+
+.shop-item:hover .item-icon {
+    transform: scale(1.1);
+    transition: transform 0.3s ease;
+}
+
+.shop-item.owned .item-icon {
+    opacity: 0.7;
+}
