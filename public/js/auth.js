@@ -172,6 +172,14 @@ const Auth = {
         return !!this.user;
     },
     
+    // Get user's display name
+    getUserName() {
+        if (this.user) {
+            return this.user.displayName || this.userProfile?.username || 'Player';
+        }
+        return 'Guest';
+    },
+    
     // Check if user is premium
     isPremium() {
         return this.userProfile?.isPremium || false;

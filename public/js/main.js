@@ -200,6 +200,7 @@ function startQuickGame(gameKey, difficulty = 'medium') {
     // Update UI
     Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
     updateTurnIndicator();
+    updatePlayerNames(gameKey);
     
     // Setup dice button
     const diceBtn = Utils.$('#roll-dice-btn');
@@ -209,6 +210,12 @@ function startQuickGame(gameKey, difficulty = 'medium') {
                 currentGame.rollDice();
             }
         };
+    }
+    
+    // Setup rules button
+    const rulesBtn = Utils.$('#rules-btn');
+    if (rulesBtn) {
+        rulesBtn.onclick = () => showGameRules(gameKey);
     }
     
     // Setup resign button
@@ -237,6 +244,52 @@ function updateTurnIndicator() {
     
     indicator.className = isYourTurn ? 'your-turn' : 'opponent-turn';
     indicator.textContent = isYourTurn ? 'Your Turn' : "Opponent's Turn";
+}
+
+// Update player names in the game UI
+function updatePlayerNames(gameKey) {
+    const player1Name = Utils.$('.player-1 .player-name');
+    const player2Name = Utils.$('.player-2 .player-name');
+    
+    if (player1Name) {
+        // Show user's name if signed in, otherwise "You"
+        const userName = Auth.isSignedIn() ? (Auth.getUserName() || 'You') : 'You';
+        player1Name.textContent = userName;
+    }
+    
+    if (player2Name) {
+        player2Name.textContent = 'AI Opponent';
+    }
+}
+
+// Show game rules popup while playing
+function showGameRules(gameKey) {
+    const game = CONFIG.games[gameKey];
+    if (!game) return;
+    
+    const content = Utils.$('#rules-modal-content');
+    if (content) {
+        content.innerHTML = `
+            <h2>${game.name} - Rules</h2>
+            <div class="rules-content">
+                ${game.rules}
+            </div>
+        `;
+    }
+    Utils.showModal('rules-modal');
+}
+
+// Check and hide ads for premium users
+function checkPremiumStatus() {
+    if (Auth.isSignedIn() && Auth.isPremium()) {
+        document.body.classList.add('premium-user');
+        // Hide AdSense ads
+        Utils.$$('.adsbygoogle, [data-ad-slot]').forEach(ad => {
+            ad.style.display = 'none';
+        });
+    } else {
+        document.body.classList.remove('premium-user');
+    }
 }
 
 // Show game info modal
@@ -391,28 +444,45 @@ function loadShopItems() {
 function createShopItemCard(item, type) {
     const owned = Auth.ownsItem(item.id);
     
-    // Create CSS-based icon instead of emoji
+    // Color mapping for items
     const iconColors = {
         // Boards
-        '🏆': '#D4AF37', '💎': '#4169E1', '🖤': '#2C2C2C', '👑': '#FFD700',
-        '📜': '#C9A86C', '⛵': '#8B4513', '🪨': '#708090', '🏛️': '#F5F5F5', '🪵': '#8B4513',
+        'board_gold_ur': { bg: 'linear-gradient(135deg, #D4AF37, #B8860B)', shape: 'board' },
+        'board_lapis_ur': { bg: 'linear-gradient(135deg, #4169E1, #1E3A8A)', shape: 'board' },
+        'board_obsidian_ur': { bg: 'linear-gradient(135deg, #2C2C2C, #1a1a1a)', shape: 'board' },
+        'board_pharaoh_senet': { bg: 'linear-gradient(135deg, #FFD700, #B8860B)', shape: 'board' },
+        'board_papyrus_senet': { bg: 'linear-gradient(135deg, #C9A86C, #8B7355)', shape: 'board' },
+        'board_viking_hnef': { bg: 'linear-gradient(135deg, #8B4513, #5D3A1A)', shape: 'board' },
+        'board_rune_hnef': { bg: 'linear-gradient(135deg, #708090, #4A5568)', shape: 'board' },
+        'board_marble_morris': { bg: 'linear-gradient(135deg, #F5F5F5, #D3D3D3)', shape: 'board' },
+        'board_wood_mancala': { bg: 'linear-gradient(135deg, #8B4513, #654321)', shape: 'board' },
         // Pieces
-        '🟢': '#2ECC71', '🟠': '#E67E22', '⚪': '#ECF0F1', '💠': '#3498DB', '🥉': '#CD7F32',
+        'piece_jade': { bg: 'linear-gradient(135deg, #2ECC71, #27AE60)', shape: 'circle' },
+        'piece_amber': { bg: 'linear-gradient(135deg, #E67E22, #D35400)', shape: 'circle' },
+        'piece_ivory': { bg: 'linear-gradient(135deg, #ECF0F1, #BDC3C7)', shape: 'circle' },
+        'piece_crystal': { bg: 'linear-gradient(135deg, #3498DB, #2980B9)', shape: 'circle' },
+        'piece_bronze': { bg: 'linear-gradient(135deg, #CD7F32, #8B5A2B)', shape: 'circle' },
         // Avatars
-        '⚔️': '#7F8C8D', '📚': '#9B59B6', '🐫': '#D4A574', '🔮': '#8E44AD', '🦅': '#C0392B'
+        'avatar_pharaoh': { bg: 'linear-gradient(135deg, #FFD700, #B8860B)', shape: 'avatar' },
+        'avatar_viking': { bg: 'linear-gradient(135deg, #7F8C8D, #5D6D7E)', shape: 'avatar' },
+        'avatar_scholar': { bg: 'linear-gradient(135deg, #9B59B6, #8E44AD)', shape: 'avatar' },
+        'avatar_merchant': { bg: 'linear-gradient(135deg, #D4A574, #B8956C)', shape: 'avatar' },
+        'avatar_oracle': { bg: 'linear-gradient(135deg, #8E44AD, #6C3483)', shape: 'avatar' },
+        'avatar_general': { bg: 'linear-gradient(135deg, #C0392B, #922B21)', shape: 'avatar' }
     };
     
-    const iconColor = iconColors[item.preview] || '#D4AF37';
-    const iconEl = Utils.createElement('div', { 
-        class: 'item-icon',
-        style: { background: iconColor }
-    });
+    const iconStyle = iconColors[item.id] || { bg: 'linear-gradient(135deg, #D4AF37, #B8860B)', shape: 'circle' };
     
     return Utils.createElement('div', { class: `shop-item ${owned ? 'owned' : ''}` }, [
-        Utils.createElement('div', { class: 'item-preview' }, [iconEl]),
+        Utils.createElement('div', { class: `item-preview item-${iconStyle.shape}` }, [
+            Utils.createElement('div', { 
+                class: 'item-icon',
+                style: { background: iconStyle.bg }
+            })
+        ]),
         Utils.createElement('h4', {}, [item.name]),
         Utils.createElement('div', { class: 'item-price' }, [
-            owned ? 'Owned' : `${item.price} coins`
+            owned ? 'Owned ✓' : `${item.price} coins`
         ]),
         owned ? 
             Utils.createElement('button', { class: 'btn-secondary', onClick: () => equipItem(item.id, type) }, ['Equip']) :
@@ -808,6 +878,7 @@ window.showDifficultyModal = showDifficultyModal;
 window.startGameWithDifficulty = startGameWithDifficulty;
 window.showGameInfo = showGameInfo;
 window.showInfoTab = showInfoTab;
+window.showGameRules = showGameRules;
 window.subscribe = subscribe;
 window.buyCoins = buyCoins;
 window.createRoom = createRoom;
