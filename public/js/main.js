@@ -102,7 +102,7 @@ function renderGamesSelection() {
             Utils.createElement('div', { class: 'game-select-actions' }, [
                 Utils.createElement('button', { 
                     class: 'btn-primary',
-                    onClick: () => startQuickGame(key)
+                    onClick: () => showDifficultyModal(key)
                 }, ['Play vs AI']),
                 Utils.createElement('button', { 
                     class: 'btn-secondary',
@@ -122,7 +122,49 @@ function renderGamesSelection() {
 }
 
 // Start a quick game against AI
-function startQuickGame(gameKey) {
+// Store pending game info for difficulty selection
+let pendingGameKey = null;
+
+// Show difficulty selection modal
+function showDifficultyModal(gameKey) {
+    pendingGameKey = gameKey;
+    const gameConfig = CONFIG.games[gameKey];
+    
+    const content = Utils.$('#difficulty-modal-content');
+    if (content) {
+        content.innerHTML = `
+            <h2>Select Difficulty</h2>
+            <p>Playing: ${gameConfig.name}</p>
+            <div class="difficulty-options">
+                <button class="btn-difficulty easy" onclick="startGameWithDifficulty('easy')">
+                    <span class="diff-icon">🌱</span>
+                    <span class="diff-name">Easy</span>
+                    <span class="diff-desc">Relaxed gameplay, learning mode</span>
+                </button>
+                <button class="btn-difficulty medium" onclick="startGameWithDifficulty('medium')">
+                    <span class="diff-icon">⚔️</span>
+                    <span class="diff-name">Medium</span>
+                    <span class="diff-desc">Balanced challenge</span>
+                </button>
+                <button class="btn-difficulty hard" onclick="startGameWithDifficulty('hard')">
+                    <span class="diff-icon">🔥</span>
+                    <span class="diff-name">Hard</span>
+                    <span class="diff-desc">Expert AI opponent</span>
+                </button>
+            </div>
+        `;
+    }
+    Utils.showModal('difficulty-modal');
+}
+
+// Start game with selected difficulty
+function startGameWithDifficulty(difficulty) {
+    Utils.hideModal('difficulty-modal');
+    if (!pendingGameKey) return;
+    startQuickGame(pendingGameKey, difficulty);
+}
+
+function startQuickGame(gameKey, difficulty = 'medium') {
     const GameClass = GameClasses[gameKey];
     if (!GameClass) {
         Utils.toast('Game not found', 'error');
@@ -149,14 +191,14 @@ function startQuickGame(gameKey) {
     // Create new game
     currentGame = new GameClass(canvas, {
         mode: 'ai',
-        aiDifficulty: 'medium',
+        aiDifficulty: difficulty,
         playerSide: 1
     });
     
     window.currentGame = currentGame;
     
     // Update UI
-    Utils.$('#game-status').textContent = `Playing: ${gameConfig.name}`;
+    Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
     updateTurnIndicator();
     
     // Setup dice button
@@ -745,6 +787,8 @@ Utils.$$('.toggle-btn')?.forEach(btn => {
 // Global functions for HTML onclick handlers
 window.navigateTo = navigateTo;
 window.startQuickGame = startQuickGame;
+window.showDifficultyModal = showDifficultyModal;
+window.startGameWithDifficulty = startGameWithDifficulty;
 window.showGameInfo = showGameInfo;
 window.showInfoTab = showInfoTab;
 window.subscribe = subscribe;
