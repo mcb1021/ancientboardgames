@@ -7,14 +7,15 @@ let currentGame = null;
 let currentPage = 'home';
 let socket = null;
 
-// Game class mapping
-const GameClasses = {
-    ur: UrGame,
-    senet: SenetGame,
-    hnefatafl: HnefataflGame,
-    morris: MorrisGame,
-    mancala: MancalaGame
-};
+// Game class mapping - with fallback checks
+const GameClasses = {};
+
+// Safely add game classes if they exist
+if (typeof UrGame !== 'undefined') GameClasses.ur = UrGame;
+if (typeof SenetGame !== 'undefined') GameClasses.senet = SenetGame;
+if (typeof HnefataflGame !== 'undefined') GameClasses.hnefatafl = HnefataflGame;
+if (typeof MorrisGame !== 'undefined') GameClasses.morris = MorrisGame;
+if (typeof MancalaGame !== 'undefined') GameClasses.mancala = MancalaGame;
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
@@ -81,6 +82,13 @@ function navigateTo(page) {
 function renderGamesSelection() {
     const container = Utils.$('.games-selection');
     if (!container) return;
+    
+    // Safety check for CONFIG
+    if (typeof CONFIG === 'undefined' || !CONFIG.games) {
+        container.innerHTML = '<p style="color: #D4AF37; text-align: center;">Loading games...</p>';
+        console.error('CONFIG.games not available');
+        return;
+    }
     
     container.innerHTML = '';
     
