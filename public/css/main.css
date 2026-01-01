@@ -1549,3 +1549,216 @@ a:hover { color: var(--color-gold-light); }
 .shop-item.owned .item-icon {
     opacity: 0.7;
 }
+
+/* ============================================
+   SHOP ICONS - PROPER STYLING
+   ============================================ */
+
+.item-preview {
+    width: 70px;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-md);
+}
+
+.item-preview .item-icon {
+    width: 100%;
+    height: 100%;
+    box-shadow: 
+        0 4px 15px rgba(0, 0, 0, 0.4),
+        inset 0 2px 4px rgba(255, 255, 255, 0.3),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    transition: transform 0.3s ease;
+}
+
+/* Board items - rectangle */
+.item-preview.item-board .item-icon {
+    border-radius: 8px;
+    width: 65px;
+    height: 45px;
+}
+
+/* Piece items - circle */
+.item-preview.item-circle .item-icon {
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+}
+
+/* Avatar items - rounded square */
+.item-preview.item-avatar .item-icon {
+    border-radius: 12px;
+    width: 55px;
+    height: 55px;
+}
+
+.shop-item:hover .item-icon {
+    transform: scale(1.1);
+}
+
+.shop-item.owned .item-icon {
+    opacity: 0.6;
+}
+
+/* ============================================
+   PREMIUM USER - HIDE ADS
+   ============================================ */
+
+body.premium-user .adsbygoogle,
+body.premium-user [data-ad-slot],
+body.premium-user .ad-container {
+    display: none !important;
+}
+
+/* ============================================
+   RULES MODAL (IN-GAME)
+   ============================================ */
+
+#rules-modal-content h2 {
+    font-family: var(--font-display);
+    color: var(--color-gold);
+    margin-bottom: var(--space-lg);
+}
+
+.rules-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: var(--space-md);
+}
+
+.rules-content h3 {
+    color: var(--color-gold-light);
+    margin-top: var(--space-lg);
+    margin-bottom: var(--space-sm);
+}
+
+.rules-content ul {
+    margin-left: var(--space-lg);
+    margin-bottom: var(--space-md);
+}
+
+.rules-content li {
+    margin-bottom: var(--space-xs);
+}
+
+/* ============================================
+   MOBILE LAYOUT FIXES
+   ============================================ */
+
+@media (max-width: 900px) {
+    .game-container {
+        flex-direction: column;
+    }
+    
+    .game-sidebar {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        gap: var(--space-md);
+        padding: var(--space-md);
+    }
+    
+    .game-sidebar.left {
+        order: 1;
+    }
+    
+    .game-board-container {
+        order: 2;
+        width: 100%;
+    }
+    
+    .game-sidebar.right {
+        order: 3;
+    }
+    
+    .player-panel {
+        flex: 1;
+        padding: var(--space-sm);
+    }
+    
+    .game-info-panel {
+        flex: 1;
+    }
+    
+    .game-controls {
+        display: flex;
+        flex-direction: row;
+        gap: var(--space-sm);
+    }
+    
+    .control-btn {
+        flex: 1;
+        padding: var(--space-sm);
+    }
+    
+    .game-history {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .game-sidebar {
+        flex-direction: column;
+    }
+    
+    .game-sidebar.left,
+    .game-sidebar.right {
+        display: flex;
+    }
+    
+    .player-panel {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+    }
+    
+    .player-avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .game-controls {
+        flex-wrap: wrap;
+    }
+    
+    .control-btn {
+        min-width: calc(50% - var(--space-xs));
+    }
+}
+
+/* ============================================
+   GAMES SECTION SPACING FIX
+   ============================================ */
+
+.featured-games .game-card {
+    margin-bottom: var(--space-xl);
+}
+
+.game-card .card-content {
+    padding: var(--space-lg);
+}
+
+.game-card .card-title {
+    margin-bottom: var(--space-sm);
+}
+
+.game-card .card-desc {
+    margin-bottom: var(--space-md);
+    line-height: 1.6;
+}
+
+.game-card .card-meta {
+    margin-bottom: var(--space-md);
+    display: flex;
+    gap: var(--space-lg);
+}
+
+/* Desktop/Mobile view toggle */
+body.desktop-view .mobile-only { display: none; }
+body.mobile-view .desktop-only { display: none; }
+
+body.mobile-view .game-sidebar { display: flex; }
+body.desktop-view .game-sidebar { display: flex; }
