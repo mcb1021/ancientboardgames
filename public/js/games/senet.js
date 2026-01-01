@@ -117,8 +117,8 @@ class SenetGame {
             const opponentPiece = this.pieces[opponent].indexOf(target);
             if (opponentPiece !== -1) {
                 // Can swap if not protected (no adjacent friendly pieces)
-                const protected = this.isProtected(opponent, target);
-                if (!protected && !special?.safe) {
+                const isProtected = this.isProtected(opponent, target);
+                if (!isProtected && !special?.safe) {
                     this.validMoves.push({ pieceIndex, from: pos, to: target, swap: opponentPiece });
                 }
                 return;
