@@ -1335,3 +1335,84 @@ a:hover { color: var(--color-gold-light); }
 
 #turn-indicator.your-turn { background: rgba(74, 124, 78, 0.2); color: #7CB07F; }
 #turn-indicator.opponent-turn { background: rgba(139, 37, 0, 0.2); color: #CD7F7F; }
+
+/* ============================================
+   GAMES SELECTION PAGE
+   ============================================ */
+
+.games-selection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-xl);
+    padding: var(--space-xl);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.game-select-card {
+    background: linear-gradient(135deg, rgba(42, 31, 20, 0.9), rgba(26, 22, 16, 0.95));
+    border: 1px solid var(--color-gold);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    transition: all 0.3s ease;
+}
+
+.game-select-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+    border-color: var(--color-gold-light);
+}
+
+.game-select-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+}
+
+.game-select-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--color-gold);
+    margin: 0;
+}
+
+.game-era {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.game-select-card p {
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-lg);
+    line-height: 1.6;
+}
+
+.game-select-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.game-select-actions button {
+    flex: 1;
+    min-width: 100px;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .games-selection {
+        grid-template-columns: 1fr;
+        padding: var(--space-md);
+    }
+    
+    .game-select-actions {
+        flex-direction: column;
+    }
+    
+    .game-select-actions button {
+        width: 100%;
+    }
+}
