@@ -259,10 +259,20 @@ const Auth = {
     // Spend coins
     async spendCoins(amount) {
         if (!this.user || !this.db) return false;
-        if ((this.userProfile?.coins || 0) < amount) return false;
+        
+        // Refresh profile from Firebase first to get latest coin balance
+        await this.refreshProfile();
+        
+        console.log('spendCoins - amount:', amount, 'current coins:', this.userProfile?.coins);
+        
+        if ((this.userProfile?.coins || 0) < amount) {
+            console.log('Not enough coins - have:', this.userProfile?.coins, 'need:', amount);
+            return false;
+        }
         
         try {
             const result = await this.db.ref(`users/${this.user.uid}/coins`).transaction(current => {
+                console.log('Transaction - current in DB:', current);
                 if ((current || 0) >= amount) {
                     return current - amount;
                 }
@@ -271,7 +281,7 @@ const Auth = {
             
             if (result.committed) {
                 if (this.userProfile) {
-                    this.userProfile.coins -= amount;
+                    this.userProfile.coins = result.snapshot.val();
                 }
                 
                 // Update display
@@ -282,10 +292,32 @@ const Auth = {
                 
                 return true;
             }
+            console.log('Transaction not committed');
             return false;
         } catch (error) {
             console.error('Spend coins error:', error);
             return false;
+        }
+    },
+    
+    // Refresh profile from Firebase
+    async refreshProfile() {
+        if (!this.user || !this.db) return;
+        
+        try {
+            const snapshot = await this.db.ref(`users/${this.user.uid}`).once('value');
+            const profile = snapshot.val();
+            if (profile) {
+                this.userProfile = profile;
+                
+                // Update coin display
+                const coinCount = Utils.$('.coin-count');
+                if (coinCount) {
+                    coinCount.textContent = Utils.formatNumber(profile.coins || 0);
+                }
+            }
+        } catch (error) {
+            console.error('Refresh profile error:', error);
         }
     },
     
