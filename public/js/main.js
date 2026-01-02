@@ -252,6 +252,8 @@ function updateTurnIndicator() {
 function updatePlayerNames(gameKey) {
     const player1Name = Utils.$('.player-1 .player-name');
     const player2Name = Utils.$('.player-2 .player-name');
+    const player1Avatar = Utils.$('.player-1 .player-avatar');
+    const player2Avatar = Utils.$('.player-2 .player-avatar');
     
     if (player1Name) {
         // Show user's name if signed in, otherwise "You"
@@ -259,8 +261,27 @@ function updatePlayerNames(gameKey) {
         player1Name.textContent = userName;
     }
     
+    // Set player 1 avatar (user's equipped avatar)
+    if (player1Avatar) {
+        const equippedAvatar = Auth.getEquipped?.('avatar');
+        if (equippedAvatar && window.ShopAssets) {
+            const svg = window.ShopAssets.getSVG(equippedAvatar);
+            if (svg) {
+                player1Avatar.innerHTML = svg;
+            }
+        } else {
+            // Default avatar
+            player1Avatar.innerHTML = '';
+        }
+    }
+    
     if (player2Name) {
         player2Name.textContent = 'AI Opponent';
+    }
+    
+    // AI gets no avatar (or default)
+    if (player2Avatar) {
+        player2Avatar.innerHTML = '';
     }
 }
 
