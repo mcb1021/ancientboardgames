@@ -1,0 +1,11 @@
+# robots.txt for Ancient Board Games
+# https://ancientboardgames.io
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://ancientboardgames.io/sitemap.xml
+
+# Disallow admin/api paths
+Disallow: /api/
