@@ -17,14 +17,20 @@ class MancalaGame {
         this.storeHeight = 200;
         this.padding = 30;
         
+        // Get equipped skins
+        const equippedBoard = Auth.getEquipped?.('board') || null;
+        const equippedPieces = Auth.getEquipped?.('piece') || null;
+        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
         this.colors = {
-            board: '#3D2914',
-            boardLight: '#5D4930',
+            board: boardColors?.primary || '#3D2914',
+            boardLight: boardColors?.secondary || '#5D4930',
             pit: '#2A1F14',
             pitHighlight: '#4A3728',
             store: '#1A1510',
-            seed: '#C9A86C',
-            seedHighlight: '#FFD700',
+            seed: pieceColors?.primary || '#C9A86C',
+            seedHighlight: pieceColors?.highlight || '#FFD700',
             player1: '#E8D5A3',
             player2: '#8B7355',
             validMove: 'rgba(74, 124, 78, 0.4)'

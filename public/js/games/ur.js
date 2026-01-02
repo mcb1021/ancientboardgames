@@ -24,16 +24,22 @@ class UrGame {
         // Game state
         this.reset();
         
-        // Colors
+        // Get equipped skins
+        const equippedBoard = Auth.getEquipped?.('board') || null;
+        const equippedPieces = Auth.getEquipped?.('piece') || null;
+        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Colors - use equipped or defaults
         this.colors = {
-            board: '#4A3728',
-            boardLight: '#5D4A3A',
+            board: boardColors?.primary || '#4A3728',
+            boardLight: boardColors?.secondary || '#5D4A3A',
             cell: '#2A1F14',
-            cellBorder: '#6B5344',
+            cellBorder: boardColors?.accent || '#6B5344',
             rosette: '#D4AF37',
             rosetteGlow: 'rgba(212, 175, 55, 0.3)',
-            player1: '#F5E6C8',
-            player1Border: '#C9B896',
+            player1: pieceColors?.primary || '#F5E6C8',
+            player1Border: pieceColors?.secondary || '#C9B896',
             player2: '#1A1A1A',
             player2Border: '#444444',
             highlight: 'rgba(74, 124, 78, 0.5)',

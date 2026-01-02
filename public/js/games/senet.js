@@ -13,11 +13,17 @@ class SenetGame {
         this.canvas.width = this.cellSize * 10 + this.boardPadding * 2;
         this.canvas.height = this.cellSize * 3 + this.boardPadding * 2;
         
+        // Get equipped skins
+        const equippedBoard = Auth.getEquipped?.('board') || null;
+        const equippedPieces = Auth.getEquipped?.('piece') || null;
+        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
         this.colors = {
-            board: '#C9A86C',
-            cell: '#E8D5A3',
-            cellBorder: '#8B7355',
-            player1: '#F5F5DC',
+            board: boardColors?.primary || '#C9A86C',
+            cell: boardColors?.secondary || '#E8D5A3',
+            cellBorder: boardColors?.accent || '#8B7355',
+            player1: pieceColors?.primary || '#F5F5DC',
             player2: '#2C2C2C',
             special: '#1E3A5F',
             highlight: 'rgba(30, 58, 95, 0.4)'

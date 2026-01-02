@@ -14,14 +14,20 @@ class HnefataflGame {
         this.canvas.width = this.cellSize * this.boardSize + this.boardPadding * 2;
         this.canvas.height = this.cellSize * this.boardSize + this.boardPadding * 2;
         
+        // Get equipped skins
+        const equippedBoard = Auth.getEquipped?.('board') || null;
+        const equippedPieces = Auth.getEquipped?.('piece') || null;
+        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
         this.colors = {
-            board: '#2F4858',
-            cellLight: '#3D5A6C',
+            board: boardColors?.primary || '#2F4858',
+            cellLight: boardColors?.secondary || '#3D5A6C',
             cellDark: '#2A4A5A',
             corner: '#1A3040',
-            throne: '#D4AF37',
+            throne: boardColors?.accent || '#D4AF37',
             attacker: '#1A1A1A',
-            defender: '#F5F5DC',
+            defender: pieceColors?.primary || '#F5F5DC',
             king: '#FFD700',
             highlight: 'rgba(212, 175, 55, 0.4)',
             selected: 'rgba(74, 124, 78, 0.5)'

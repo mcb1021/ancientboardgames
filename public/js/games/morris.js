@@ -13,12 +13,18 @@ class MorrisGame {
         this.padding = 50;
         this.spacing = (this.canvas.width - this.padding * 2) / 6;
         
+        // Get equipped skins
+        const equippedBoard = Auth.getEquipped?.('board') || null;
+        const equippedPieces = Auth.getEquipped?.('piece') || null;
+        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
         this.colors = {
-            board: '#4A1C1C',
-            lines: '#8B4513',
-            point: '#CD853F',
+            board: boardColors?.primary || '#4A1C1C',
+            lines: boardColors?.secondary || '#8B4513',
+            point: boardColors?.accent || '#CD853F',
             pointHighlight: '#FFD700',
-            player1: '#F5F5DC',
+            player1: pieceColors?.primary || '#F5F5DC',
             player2: '#2C2C2C',
             mill: 'rgba(212, 175, 55, 0.5)',
             validMove: 'rgba(74, 124, 78, 0.5)'
