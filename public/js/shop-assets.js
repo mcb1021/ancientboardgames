@@ -420,4 +420,4 @@ const ShopAssets = {
 
 // Make globally available
 window.ShopAssets = ShopAssets;
-console.log('ShopAssets loaded, boards:', Object.keys(ShopAssets.boards));
+

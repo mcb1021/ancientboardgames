@@ -72,6 +72,8 @@ function navigateTo(page) {
         loadRankings();
     } else if (page === 'lobby') {
         loadRooms();
+    } else if (page === 'profile') {
+        loadProfile();
     }
     
     // Scroll to top
@@ -413,7 +415,7 @@ function initShop() {
 }
 
 function loadShopItems() {
-    console.log('loadShopItems called, ShopAssets available:', !!window.ShopAssets);
+    
     
     // Board skins
     const boardsGrid = Utils.$('#boards-grid');
@@ -449,7 +451,7 @@ function createShopItemCard(item, type) {
     
     // Get SVG from ShopAssets
     const svg = window.ShopAssets?.getSVG(item.id);
-    console.log('createShopItemCard:', item.id, 'SVG found:', !!svg);
+    
     
     const previewEl = Utils.createElement('div', { class: 'item-preview' });
     if (svg) {
@@ -902,6 +904,158 @@ Utils.$$('.toggle-btn')?.forEach(btn => {
     });
 });
 
+// ============================================
+// PROFILE PAGE
+// ============================================
+
+function loadProfile() {
+    if (!Auth.isSignedIn()) {
+        Utils.$('#profile-name').textContent = 'Guest';
+        Utils.$('#profile-membership').innerHTML = '<span class="membership-badge free">Sign in to track progress</span>';
+        Utils.$('#profile-coins').textContent = '0';
+        Utils.$('#profile-games').textContent = '0';
+        Utils.$('#profile-wins').textContent = '0';
+        return;
+    }
+    
+    const profile = Auth.userProfile;
+    
+    // Basic info
+    Utils.$('#profile-name').textContent = Auth.getUserName();
+    Utils.$('#profile-coins').textContent = Utils.formatNumber(profile?.coins || 0);
+    Utils.$('#profile-games').textContent = profile?.stats?.gamesPlayed || 0;
+    Utils.$('#profile-wins').textContent = profile?.stats?.gamesWon || 0;
+    
+    // Membership status
+    const membershipEl = Utils.$('#profile-membership');
+    if (Auth.isPremium()) {
+        membershipEl.innerHTML = '<span class="membership-badge premium">★ Premium Member</span>';
+    } else {
+        membershipEl.innerHTML = '<span class="membership-badge free">Free Account</span>';
+    }
+    
+    // Equipped avatar
+    const equippedAvatar = Auth.getEquipped('avatar');
+    const avatarPreview = Utils.$('#profile-avatar');
+    if (equippedAvatar && window.ShopAssets) {
+        avatarPreview.innerHTML = window.ShopAssets.getSVG(equippedAvatar) || '';
+    }
+    
+    // Load equipped items display
+    loadEquippedDisplay();
+    
+    // Load collection
+    loadCollection('boards');
+    
+    // Load ratings
+    loadRatingsDisplay();
+    
+    // Setup collection tabs
+    Utils.$$('.collection-tabs .tab-btn').forEach(btn => {
+        btn.onclick = () => {
+            Utils.$$('.collection-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadCollection(btn.dataset.tab);
+        };
+    });
+}
+
+function loadEquippedDisplay() {
+    const types = ['board', 'piece', 'avatar'];
+    
+    types.forEach(type => {
+        const equipped = Auth.getEquipped(type);
+        const previewEl = Utils.$(`#equipped-${type}`);
+        const nameEl = Utils.$(`#equipped-${type}-name`);
+        
+        if (equipped && window.ShopAssets) {
+            const svg = window.ShopAssets.getSVG(equipped);
+            if (previewEl && svg) previewEl.innerHTML = svg;
+            
+            // Find item name
+            const allItems = [...(CONFIG.shopItems?.boards || []), 
+                            ...(CONFIG.shopItems?.pieces || []), 
+                            ...(CONFIG.shopItems?.avatars || [])];
+            const item = allItems.find(i => i.id === equipped);
+            if (nameEl) nameEl.textContent = item?.name || equipped;
+        } else {
+            if (previewEl) previewEl.innerHTML = '<span style="color:#666">None</span>';
+            if (nameEl) nameEl.textContent = 'Default';
+        }
+    });
+}
+
+function loadCollection(category) {
+    const grid = Utils.$('#collection-grid');
+    if (!grid) return;
+    
+    const inventory = Auth.userProfile?.inventory || [];
+    
+    // Get items for this category
+    let items = [];
+    if (category === 'boards') items = CONFIG.shopItems?.boards || [];
+    else if (category === 'pieces') items = CONFIG.shopItems?.pieces || [];
+    else if (category === 'avatars') items = CONFIG.shopItems?.avatars || [];
+    
+    // Filter to owned items
+    const owned = items.filter(item => inventory.includes(item.id));
+    
+    if (owned.length === 0) {
+        grid.innerHTML = '<p class="empty-collection">No items in this category. Visit the shop!</p>';
+        return;
+    }
+    
+    grid.innerHTML = '';
+    owned.forEach(item => {
+        const isEquipped = Auth.isEquipped(item.id);
+        const svg = window.ShopAssets?.getSVG(item.id) || '';
+        
+        const el = Utils.createElement('div', { 
+            class: `collection-item ${isEquipped ? 'equipped' : ''}`,
+            onClick: () => toggleEquip(item.id, category.slice(0, -1)) // Remove 's' from end
+        }, []);
+        
+        el.innerHTML = `${svg}<div class="item-name">${item.name}</div>`;
+        grid.appendChild(el);
+    });
+}
+
+async function toggleEquip(itemId, type) {
+    if (Auth.isEquipped(itemId)) {
+        await Auth.unequipItem(type);
+        Utils.toast('Item unequipped', 'info');
+    } else {
+        await Auth.equipItem(itemId, type);
+        Utils.toast('Item equipped!', 'success');
+    }
+    loadProfile(); // Refresh display
+}
+
+function loadRatingsDisplay() {
+    const grid = Utils.$('#ratings-grid');
+    if (!grid) return;
+    
+    const ratings = Auth.userProfile?.ratings || {};
+    const games = ['ur', 'senet', 'hnefatafl', 'morris', 'mancala'];
+    const gameNames = {
+        ur: 'Royal Game of Ur',
+        senet: 'Senet',
+        hnefatafl: 'Hnefatafl',
+        morris: "Nine Men's Morris",
+        mancala: 'Mancala'
+    };
+    
+    grid.innerHTML = '';
+    games.forEach(game => {
+        const rating = ratings[game] || 1200;
+        const card = Utils.createElement('div', { class: 'rating-card' }, [
+            Utils.createElement('div', { class: 'game-name' }, [gameNames[game]]),
+            Utils.createElement('div', { class: 'rating-value' }, [rating.toString()])
+        ]);
+        grid.appendChild(card);
+    });
+}
+
 // Global functions for HTML onclick handlers
 window.navigateTo = navigateTo;
 window.startQuickGame = startQuickGame;
@@ -914,6 +1068,7 @@ window.subscribe = subscribe;
 window.buyCoins = buyCoins;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
+window.toggleEquip = toggleEquip;
 window.createRoom = createRoom;
 window.joinRoom = joinRoom;
 window.findQuickMatch = findQuickMatch;

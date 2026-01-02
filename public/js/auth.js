@@ -58,12 +58,16 @@ const Auth = {
                 coinCount.textContent = Utils.formatNumber(this.userProfile.coins || 0);
             }
             
+            // Check subscription status and apply benefits
+            await this.checkSubscription();
+            
             Utils.toast(`Welcome back, ${user.displayName || 'Player'}!`, 'success');
         } else {
             // User is signed out
             authBtn.classList.remove('hidden');
             userInfo.classList.add('hidden');
             this.userProfile = null;
+            document.body.classList.remove('premium-user');
         }
         
         // Emit auth change event

@@ -274,6 +274,16 @@ const CONFIG = {
             1000: 200,
             2500: 750,
             5000: 2000
+        },
+        // Stripe Price IDs
+        stripePrices: {
+            monthly: 'price_1SkpyqJmPcz7JQnM4V226T1n',
+            annual: 'price_1Skq2SJmPcz7JQnMwp0wtyEI',
+            coins_100: 'price_1SkxA9JmPcz7JQnMilXnihn4',
+            coins_500: 'price_1SkxDfJmPcz7JQnM0k9JPuNT',
+            coins_1000: 'price_1SkxExJmPcz7JQnM1bQ4tMJu',
+            coins_2500: 'price_1SkxGoJmPcz7JQnM1aLo3wYL',
+            coins_5000: 'price_1SkxHzJmPcz7JQnMurCMW7V0'
         }
     },
     
