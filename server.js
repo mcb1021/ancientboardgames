@@ -81,15 +81,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Create checkout session for subscriptions
 app.post('/api/create-checkout-session', async (req, res) => {
+    console.log('Checkout request received:', JSON.stringify(req.body));
+    
     try {
         const { priceId, userId, userEmail } = req.body;
         
+        console.log('priceId:', priceId, 'userId:', userId, 'userEmail:', userEmail);
+        
         if (!priceId || !userId) {
+            console.log('Missing priceId or userId');
             return res.status(400).json({ error: 'Missing priceId or userId' });
         }
         
         // Determine if subscription or one-time payment
         const isSubscription = priceId === PRICE_IDS.monthly || priceId === PRICE_IDS.annual;
+        console.log('Is subscription:', isSubscription);
         
         const sessionConfig = {
             payment_method_types: ['card'],
@@ -111,11 +117,14 @@ app.post('/api/create-checkout-session', async (req, res) => {
             sessionConfig.customer_email = userEmail;
         }
         
+        console.log('Creating Stripe session...');
         const session = await stripe.checkout.sessions.create(sessionConfig);
+        console.log('Session created:', session.id);
         
         res.json({ url: session.url, sessionId: session.id });
     } catch (error) {
-        console.error('Checkout session error:', error);
+        console.error('Checkout session error:', error.message);
+        console.error('Full error:', error);
         res.status(500).json({ error: error.message });
     }
 });
