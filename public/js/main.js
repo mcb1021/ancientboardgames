@@ -556,27 +556,28 @@ async function subscribe(plan) {
         return;
     }
     
-    const price = plan === 'monthly' ? CONFIG.pricing.membership.monthly : CONFIG.pricing.membership.annual;
+    const priceId = plan === 'monthly' 
+        ? CONFIG.pricing.stripePrices.monthly 
+        : CONFIG.pricing.stripePrices.annual;
     
     try {
-        // In production, this would create a Stripe checkout session
         Utils.toast('Redirecting to checkout...', 'info');
         
-        // Simulated for demo
         const response = await fetch('/api/create-checkout-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                plan, 
-                price,
-                userId: Auth.user.uid 
+                priceId,
+                userId: Auth.user.uid,
+                userEmail: Auth.user.email
             })
         });
         
         if (response.ok) {
-            const { sessionId } = await response.json();
-            const stripe = Stripe(CONFIG.stripe.publicKey);
-            await stripe.redirectToCheckout({ sessionId });
+            const { url } = await response.json();
+            window.location.href = url;
+        } else {
+            throw new Error('Failed to create checkout session');
         }
     } catch (error) {
         console.error('Subscription error:', error);
@@ -590,8 +591,12 @@ async function buyCoins(amount) {
         return;
     }
     
-    const price = CONFIG.pricing.coins[amount];
-    const bonus = CONFIG.pricing.bonusCoins[amount];
+    const priceId = CONFIG.pricing.stripePrices[`coins_${amount}`];
+    
+    if (!priceId) {
+        Utils.toast('Invalid coin package', 'error');
+        return;
+    }
     
     try {
         Utils.toast('Redirecting to checkout...', 'info');
@@ -600,17 +605,17 @@ async function buyCoins(amount) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                type: 'coins',
-                amount: amount + bonus,
-                price,
-                userId: Auth.user.uid 
+                priceId,
+                userId: Auth.user.uid,
+                userEmail: Auth.user.email
             })
         });
         
         if (response.ok) {
-            const { sessionId } = await response.json();
-            const stripe = Stripe(CONFIG.stripe.publicKey);
-            await stripe.redirectToCheckout({ sessionId });
+            const { url } = await response.json();
+            window.location.href = url;
+        } else {
+            throw new Error('Failed to create checkout session');
         }
     } catch (error) {
         console.error('Purchase error:', error);
@@ -1056,6 +1061,20 @@ function loadRatingsDisplay() {
     });
 }
 
+// Show Buy Coins section in shop
+function showBuyCoins() {
+    // Navigate to shop if not there
+    navigateTo('shop');
+    
+    // Click the Buy Coins tab
+    setTimeout(() => {
+        const coinsTab = document.querySelector('.shop-nav-btn[data-category="coins"]');
+        if (coinsTab) {
+            coinsTab.click();
+        }
+    }, 100);
+}
+
 // Global functions for HTML onclick handlers
 window.navigateTo = navigateTo;
 window.startQuickGame = startQuickGame;
@@ -1066,6 +1085,7 @@ window.showInfoTab = showInfoTab;
 window.showGameRules = showGameRules;
 window.subscribe = subscribe;
 window.buyCoins = buyCoins;
+window.showBuyCoins = showBuyCoins;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
