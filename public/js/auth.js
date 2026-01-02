@@ -263,37 +263,34 @@ const Auth = {
         // Refresh profile from Firebase first to get latest coin balance
         await this.refreshProfile();
         
-        console.log('spendCoins - amount:', amount, 'current coins:', this.userProfile?.coins);
+        const currentCoins = this.userProfile?.coins || 0;
+        console.log('spendCoins - amount:', amount, 'current coins:', currentCoins);
         
-        if ((this.userProfile?.coins || 0) < amount) {
-            console.log('Not enough coins - have:', this.userProfile?.coins, 'need:', amount);
+        if (currentCoins < amount) {
+            console.log('Not enough coins - have:', currentCoins, 'need:', amount);
             return false;
         }
         
         try {
-            const result = await this.db.ref(`users/${this.user.uid}/coins`).transaction(current => {
-                console.log('Transaction - current in DB:', current);
-                if ((current || 0) >= amount) {
-                    return current - amount;
-                }
-                return; // Abort transaction
+            // Use simple update instead of transaction (transaction has permission issues)
+            const newBalance = currentCoins - amount;
+            await this.db.ref(`users/${this.user.uid}`).update({
+                coins: newBalance
             });
             
-            if (result.committed) {
-                if (this.userProfile) {
-                    this.userProfile.coins = result.snapshot.val();
-                }
-                
-                // Update display
-                const coinCount = Utils.$('.coin-count');
-                if (coinCount) {
-                    coinCount.textContent = Utils.formatNumber(this.userProfile.coins);
-                }
-                
-                return true;
+            // Update local profile
+            if (this.userProfile) {
+                this.userProfile.coins = newBalance;
             }
-            console.log('Transaction not committed');
-            return false;
+            
+            // Update display
+            const coinCount = Utils.$('.coin-count');
+            if (coinCount) {
+                coinCount.textContent = Utils.formatNumber(newBalance);
+            }
+            
+            console.log('Coins spent successfully, new balance:', newBalance);
+            return true;
         } catch (error) {
             console.error('Spend coins error:', error);
             return false;
