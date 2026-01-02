@@ -97,13 +97,14 @@ const Auth = {
                         gamesLost: 0
                     },
                     ratings: {
-                        ur: CONFIG.rating.initial,
-                        senet: CONFIG.rating.initial,
-                        hnefatafl: CONFIG.rating.initial,
-                        morris: CONFIG.rating.initial,
-                        mancala: CONFIG.rating.initial
+                        ur: CONFIG?.rating?.initial || 1200,
+                        senet: CONFIG?.rating?.initial || 1200,
+                        hnefatafl: CONFIG?.rating?.initial || 1200,
+                        morris: CONFIG?.rating?.initial || 1200,
+                        mancala: CONFIG?.rating?.initial || 1200
                     },
                     inventory: [],
+                    equipped: {},
                     settings: {
                         soundEnabled: true,
                         musicEnabled: true,

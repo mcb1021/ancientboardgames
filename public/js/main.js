@@ -413,6 +413,8 @@ function initShop() {
 }
 
 function loadShopItems() {
+    console.log('loadShopItems called, ShopAssets available:', !!window.ShopAssets);
+    
     // Board skins
     const boardsGrid = Utils.$('#boards-grid');
     if (boardsGrid) {
@@ -447,6 +449,7 @@ function createShopItemCard(item, type) {
     
     // Get SVG from ShopAssets
     const svg = window.ShopAssets?.getSVG(item.id);
+    console.log('createShopItemCard:', item.id, 'SVG found:', !!svg);
     
     const previewEl = Utils.createElement('div', { class: 'item-preview' });
     if (svg) {
