@@ -313,6 +313,87 @@ const Auth = {
         return this.userProfile?.inventory?.includes(itemId) || false;
     },
     
+    // Check if an item is equipped
+    isEquipped(itemId) {
+        if (!this.userProfile?.equipped) return false;
+        const type = itemId.split('_')[0];
+        return this.userProfile.equipped[type] === itemId;
+    },
+    
+    // Get equipped item of a type
+    getEquipped(type) {
+        return this.userProfile?.equipped?.[type] || null;
+    },
+    
+    // Equip an item
+    async equipItem(itemId, type) {
+        if (!this.user || !this.db) return false;
+        if (!this.ownsItem(itemId)) return false;
+        
+        try {
+            const itemType = itemId.split('_')[0]; // 'board', 'piece', or 'avatar'
+            await this.db.ref(`users/${this.user.uid}/equipped/${itemType}`).set(itemId);
+            
+            if (!this.userProfile.equipped) {
+                this.userProfile.equipped = {};
+            }
+            this.userProfile.equipped[itemType] = itemId;
+            
+            return true;
+        } catch (error) {
+            console.error('Equip item error:', error);
+            return false;
+        }
+    },
+    
+    // Unequip an item
+    async unequipItem(type) {
+        if (!this.user || !this.db) return false;
+        
+        try {
+            const itemType = type.split('_')[0];
+            await this.db.ref(`users/${this.user.uid}/equipped/${itemType}`).remove();
+            
+            if (this.userProfile.equipped) {
+                delete this.userProfile.equipped[itemType];
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Unequip item error:', error);
+            return false;
+        }
+    },
+    
+    // Check subscription status and give monthly coins
+    async checkSubscription() {
+        if (!this.user || !this.userProfile) return;
+        
+        const now = Date.now();
+        const lastCoinGrant = this.userProfile.lastCoinGrant || 0;
+        const oneMonth = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+        
+        // If premium and hasn't received coins this month
+        if (this.isPremium() && (now - lastCoinGrant > oneMonth)) {
+            try {
+                // Grant 500 monthly coins for premium
+                await this.addCoins(500);
+                await this.db.ref(`users/${this.user.uid}/lastCoinGrant`).set(now);
+                this.userProfile.lastCoinGrant = now;
+                Utils.toast('Premium bonus: +500 coins!', 'success');
+            } catch (error) {
+                console.error('Monthly coin grant error:', error);
+            }
+        }
+        
+        // Hide ads for premium users
+        if (this.isPremium()) {
+            document.body.classList.add('premium-user');
+        } else {
+            document.body.classList.remove('premium-user');
+        }
+    },
+    
     // Apply penalty for leaving game
     async applyPenalty(type) {
         if (!this.user || !this.db) return;

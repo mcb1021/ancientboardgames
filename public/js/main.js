@@ -443,51 +443,79 @@ function loadShopItems() {
 
 function createShopItemCard(item, type) {
     const owned = Auth.ownsItem(item.id);
+    const equipped = Auth.isEquipped(item.id);
     
-    // Color mapping for items
-    const iconColors = {
-        // Boards
-        'board_gold_ur': { bg: 'linear-gradient(135deg, #D4AF37, #B8860B)', shape: 'board' },
-        'board_lapis_ur': { bg: 'linear-gradient(135deg, #4169E1, #1E3A8A)', shape: 'board' },
-        'board_obsidian_ur': { bg: 'linear-gradient(135deg, #2C2C2C, #1a1a1a)', shape: 'board' },
-        'board_pharaoh_senet': { bg: 'linear-gradient(135deg, #FFD700, #B8860B)', shape: 'board' },
-        'board_papyrus_senet': { bg: 'linear-gradient(135deg, #C9A86C, #8B7355)', shape: 'board' },
-        'board_viking_hnef': { bg: 'linear-gradient(135deg, #8B4513, #5D3A1A)', shape: 'board' },
-        'board_rune_hnef': { bg: 'linear-gradient(135deg, #708090, #4A5568)', shape: 'board' },
-        'board_marble_morris': { bg: 'linear-gradient(135deg, #F5F5F5, #D3D3D3)', shape: 'board' },
-        'board_wood_mancala': { bg: 'linear-gradient(135deg, #8B4513, #654321)', shape: 'board' },
-        // Pieces
-        'piece_jade': { bg: 'linear-gradient(135deg, #2ECC71, #27AE60)', shape: 'circle' },
-        'piece_amber': { bg: 'linear-gradient(135deg, #E67E22, #D35400)', shape: 'circle' },
-        'piece_ivory': { bg: 'linear-gradient(135deg, #ECF0F1, #BDC3C7)', shape: 'circle' },
-        'piece_crystal': { bg: 'linear-gradient(135deg, #3498DB, #2980B9)', shape: 'circle' },
-        'piece_bronze': { bg: 'linear-gradient(135deg, #CD7F32, #8B5A2B)', shape: 'circle' },
-        // Avatars
-        'avatar_pharaoh': { bg: 'linear-gradient(135deg, #FFD700, #B8860B)', shape: 'avatar' },
-        'avatar_viking': { bg: 'linear-gradient(135deg, #7F8C8D, #5D6D7E)', shape: 'avatar' },
-        'avatar_scholar': { bg: 'linear-gradient(135deg, #9B59B6, #8E44AD)', shape: 'avatar' },
-        'avatar_merchant': { bg: 'linear-gradient(135deg, #D4A574, #B8956C)', shape: 'avatar' },
-        'avatar_oracle': { bg: 'linear-gradient(135deg, #8E44AD, #6C3483)', shape: 'avatar' },
-        'avatar_general': { bg: 'linear-gradient(135deg, #C0392B, #922B21)', shape: 'avatar' }
-    };
+    // Get SVG from ShopAssets
+    const svg = window.ShopAssets?.getSVG(item.id);
     
-    const iconStyle = iconColors[item.id] || { bg: 'linear-gradient(135deg, #D4AF37, #B8860B)', shape: 'circle' };
+    const previewEl = Utils.createElement('div', { class: 'item-preview' });
+    if (svg) {
+        previewEl.innerHTML = svg;
+    } else {
+        // Fallback colored circle
+        const colors = {
+            'board': 'linear-gradient(135deg, #D4AF37, #8B6914)',
+            'piece': 'linear-gradient(135deg, #2ECC71, #1D6F3C)',
+            'avatar': 'linear-gradient(135deg, #9B59B6, #6C3483)'
+        };
+        const itemType = item.id.split('_')[0];
+        const fallback = Utils.createElement('div', {
+            class: 'item-icon-fallback',
+            style: { background: colors[itemType] || colors.piece }
+        });
+        previewEl.appendChild(fallback);
+    }
     
-    return Utils.createElement('div', { class: `shop-item ${owned ? 'owned' : ''}` }, [
-        Utils.createElement('div', { class: `item-preview item-${iconStyle.shape}` }, [
-            Utils.createElement('div', { 
-                class: 'item-icon',
-                style: { background: iconStyle.bg }
-            })
-        ]),
+    // Create action button
+    let actionBtn;
+    if (owned) {
+        if (equipped) {
+            actionBtn = Utils.createElement('button', { 
+                class: 'btn-equipped', 
+                onClick: () => unequipItem(item.id, type) 
+            }, ['✓ Equipped']);
+        } else {
+            actionBtn = Utils.createElement('button', { 
+                class: 'btn-secondary', 
+                onClick: () => equipItem(item.id, type) 
+            }, ['Equip']);
+        }
+    } else {
+        actionBtn = Utils.createElement('button', { 
+            class: 'btn-primary', 
+            onClick: () => purchaseItem(item) 
+        }, ['Buy']);
+    }
+    
+    return Utils.createElement('div', { class: `shop-item ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}` }, [
+        previewEl,
         Utils.createElement('h4', {}, [item.name]),
         Utils.createElement('div', { class: 'item-price' }, [
-            owned ? 'Owned ✓' : `${item.price} coins`
+            owned ? (equipped ? 'Equipped' : 'Owned ✓') : `${item.price} coins`
         ]),
-        owned ? 
-            Utils.createElement('button', { class: 'btn-secondary', onClick: () => equipItem(item.id, type) }, ['Equip']) :
-            Utils.createElement('button', { class: 'btn-primary', onClick: () => purchaseItem(item) }, ['Buy'])
+        actionBtn
     ]);
+}
+
+// Equip an item
+async function equipItem(itemId, type) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    await Auth.equipItem(itemId, type);
+    Utils.toast(`Equipped ${itemId.split('_').slice(1).join(' ')}!`, 'success');
+    loadShopItems();
+}
+
+// Unequip an item
+async function unequipItem(itemId, type) {
+    if (!Auth.isSignedIn()) return;
+    
+    await Auth.unequipItem(type);
+    Utils.toast('Item unequipped', 'info');
+    loadShopItems();
 }
 
 async function purchaseItem(item) {
@@ -881,6 +909,8 @@ window.showInfoTab = showInfoTab;
 window.showGameRules = showGameRules;
 window.subscribe = subscribe;
 window.buyCoins = buyCoins;
+window.equipItem = equipItem;
+window.unequipItem = unequipItem;
 window.createRoom = createRoom;
 window.joinRoom = joinRoom;
 window.findQuickMatch = findQuickMatch;
