@@ -323,18 +323,24 @@ const Auth = {
         if (!this.user || !this.db) return false;
         
         try {
-            await this.db.ref(`users/${this.user.uid}/inventory`).transaction(inventory => {
-                if (!inventory) inventory = [];
-                if (!inventory.includes(itemId)) {
-                    inventory.push(itemId);
-                }
-                return inventory;
-            });
-            
-            if (this.userProfile && !this.userProfile.inventory.includes(itemId)) {
-                this.userProfile.inventory.push(itemId);
+            // Ensure inventory exists in local profile
+            if (!this.userProfile.inventory) {
+                this.userProfile.inventory = [];
             }
             
+            // Check if already owned
+            if (this.userProfile.inventory.includes(itemId)) {
+                console.log('Item already in inventory:', itemId);
+                return true;
+            }
+            
+            // Add to local inventory
+            this.userProfile.inventory.push(itemId);
+            
+            // Save entire inventory array to Firebase
+            await this.db.ref(`users/${this.user.uid}/inventory`).set(this.userProfile.inventory);
+            
+            console.log('Added to inventory:', itemId);
             return true;
         } catch (error) {
             console.error('Add to inventory error:', error);
@@ -350,6 +356,7 @@ const Auth = {
     // Check if an item is equipped
     isEquipped(itemId) {
         if (!this.userProfile?.equipped) return false;
+        // Get type from item ID (e.g., 'board_golden' -> 'board')
         const type = itemId.split('_')[0];
         return this.userProfile.equipped[type] === itemId;
     },
@@ -362,10 +369,14 @@ const Auth = {
     // Equip an item
     async equipItem(itemId, type) {
         if (!this.user || !this.db) return false;
-        if (!this.ownsItem(itemId)) return false;
+        if (!this.ownsItem(itemId)) {
+            console.log('Cannot equip - item not owned:', itemId);
+            return false;
+        }
         
         try {
-            const itemType = itemId.split('_')[0]; // 'board', 'piece', or 'avatar'
+            // Get type from item ID if not provided
+            const itemType = type || itemId.split('_')[0]; // 'board', 'piece', or 'avatar'
             await this.db.ref(`users/${this.user.uid}/equipped/${itemType}`).set(itemId);
             
             if (!this.userProfile.equipped) {
@@ -373,6 +384,7 @@ const Auth = {
             }
             this.userProfile.equipped[itemType] = itemId;
             
+            console.log('Equipped:', itemId, 'as', itemType);
             return true;
         } catch (error) {
             console.error('Equip item error:', error);
@@ -385,13 +397,13 @@ const Auth = {
         if (!this.user || !this.db) return false;
         
         try {
-            const itemType = type.split('_')[0];
-            await this.db.ref(`users/${this.user.uid}/equipped/${itemType}`).remove();
+            await this.db.ref(`users/${this.user.uid}/equipped/${type}`).remove();
             
-            if (this.userProfile.equipped) {
-                delete this.userProfile.equipped[itemType];
+            if (this.userProfile?.equipped) {
+                delete this.userProfile.equipped[type];
             }
             
+            console.log('Unequipped:', type);
             return true;
         } catch (error) {
             console.error('Unequip item error:', error);

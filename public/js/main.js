@@ -913,7 +913,7 @@ Utils.$$('.toggle-btn')?.forEach(btn => {
 // PROFILE PAGE
 // ============================================
 
-function loadProfile() {
+async function loadProfile() {
     if (!Auth.isSignedIn()) {
         Utils.$('#profile-name').textContent = 'Guest';
         Utils.$('#profile-membership').innerHTML = '<span class="membership-badge free">Sign in to track progress</span>';
@@ -923,7 +923,12 @@ function loadProfile() {
         return;
     }
     
+    // Refresh profile from Firebase to get latest data
+    await Auth.refreshProfile();
+    
     const profile = Auth.userProfile;
+    console.log('Profile loaded:', profile);
+    console.log('Inventory:', profile?.inventory);
     
     // Basic info
     Utils.$('#profile-name').textContent = Auth.getUserName();
