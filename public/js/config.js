@@ -3,20 +3,20 @@
 // ============================================
 
 const CONFIG = {
-    // Firebase Configuration (Replace with your own)
+    // Firebase Configuration
     firebase: {
-        apiKey: "YOUR_FIREBASE_API_KEY",
-        authDomain: "your-project.firebaseapp.com",
-        databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-        projectId: "your-project",
-        storageBucket: "your-project.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
+        apiKey: "AIzaSyD-okLJ_W5KU8j57kextDCONVG6Zw1fp3c",
+        authDomain: "ancient-board-games-af64c.firebaseapp.com",
+        databaseURL: "https://ancient-board-games-af64c-default-rtdb.firebaseio.com",
+        projectId: "ancient-board-games-af64c",
+        storageBucket: "ancient-board-games-af64c.firebasestorage.app",
+        messagingSenderId: "29980255876",
+        appId: "1:29980255876:web:5822e7719910d8757044d1"
     },
     
     // Stripe Configuration
     stripe: {
-        publicKey: "pk_test_YOUR_STRIPE_PUBLIC_KEY"
+        publicKey: "pk_live_51RyjMMJmPcz7JQnM27qD3sYGmXrvDIf5jjryZIaOJMHrS3B4lytSmWTo1E41ikRAqLfMfyBUR2UETwG9y9VudhoP00O2aWbnNl"
     },
     
     // Socket.io Server URL (for multiplayer)
