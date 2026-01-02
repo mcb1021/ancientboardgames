@@ -20,82 +20,108 @@ const io = new Server(server, {
     }
 });
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// Firebase Admin SDK
+const admin = require('firebase-admin');
+
+// Initialize Firebase Admin (use environment variable for service account)
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: process.env.FIREBASE_DATABASE_URL
+    });
+} else {
+    // Fallback for local development
+    admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+        databaseURL: process.env.FIREBASE_DATABASE_URL
+    });
+}
+
+const db = admin.database();
 
 // Stripe setup
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_YOUR_SECRET_KEY');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Stripe Price ID mapping
+const PRICE_IDS = {
+    monthly: 'price_1SkpyqJmPcz7JQnM4V226T1n',
+    annual: 'price_1Skq2SJmPcz7JQnMwp0wtyEI',
+    coins_100: 'price_1SkxA9JmPcz7JQnMilXnihn4',
+    coins_500: 'price_1SkxDfJmPcz7JQnM0k9JPuNT',
+    coins_1000: 'price_1SkxExJmPcz7JQnM1bQ4tMJu',
+    coins_2500: 'price_1SkxGoJmPcz7JQnM1aLo3wYL',
+    coins_5000: 'price_1SkxHzJmPcz7JQnMurCMW7V0'
+};
+
+// Coin amounts (including bonuses)
+const COIN_AMOUNTS = {
+    'price_1SkxA9JmPcz7JQnMilXnihn4': 100,
+    'price_1SkxDfJmPcz7JQnM0k9JPuNT': 550,    // 500 + 50 bonus
+    'price_1SkxExJmPcz7JQnM1bQ4tMJu': 1200,   // 1000 + 200 bonus
+    'price_1SkxGoJmPcz7JQnM1aLo3wYL': 3250,   // 2500 + 750 bonus
+    'price_1SkxHzJmPcz7JQnMurCMW7V0': 7000    // 5000 + 2000 bonus
+};
 
 // In-memory storage (use Redis/DB in production)
 const rooms = new Map();
-const matchmakingQueue = new Map(); // game -> [players]
+const matchmakingQueue = new Map();
 const onlinePlayers = new Set();
 let gamesToday = 0;
+
+// Middleware - IMPORTANT: raw body for webhook, json for others
+app.use('/api/webhook', express.raw({ type: 'application/json' }));
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================
 // STRIPE PAYMENT ENDPOINTS
 // ============================================
 
-// Create checkout session for subscriptions and purchases
+// Create checkout session for subscriptions
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
-        const { plan, type, amount, price, userId } = req.body;
+        const { priceId, userId, userEmail } = req.body;
         
-        let lineItems;
-        let mode;
-        
-        if (type === 'coins') {
-            // One-time coin purchase
-            lineItems = [{
-                price_data: {
-                    currency: 'usd',
-                    product_data: {
-                        name: `${amount} Ancient Coins`,
-                        description: 'In-game currency for Ancient Board Games'
-                    },
-                    unit_amount: price
-                },
-                quantity: 1
-            }];
-            mode = 'payment';
-        } else {
-            // Subscription
-            const priceId = plan === 'monthly' 
-                ? process.env.STRIPE_MONTHLY_PRICE_ID 
-                : process.env.STRIPE_ANNUAL_PRICE_ID;
-            
-            lineItems = [{
-                price: priceId,
-                quantity: 1
-            }];
-            mode = 'subscription';
+        if (!priceId || !userId) {
+            return res.status(400).json({ error: 'Missing priceId or userId' });
         }
         
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: lineItems,
-            mode: mode,
-            success_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}?success=true&session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}?canceled=true`,
-            metadata: {
-                userId,
-                type: type || 'subscription',
-                amount: amount?.toString() || '',
-                plan: plan || ''
-            }
-        });
+        // Determine if subscription or one-time payment
+        const isSubscription = priceId === PRICE_IDS.monthly || priceId === PRICE_IDS.annual;
         
-        res.json({ sessionId: session.id });
+        const sessionConfig = {
+            payment_method_types: ['card'],
+            line_items: [{
+                price: priceId,
+                quantity: 1
+            }],
+            mode: isSubscription ? 'subscription' : 'payment',
+            success_url: `${process.env.CLIENT_URL || 'https://ancientboardgames.io'}/?success=true`,
+            cancel_url: `${process.env.CLIENT_URL || 'https://ancientboardgames.io'}/?canceled=true`,
+            metadata: {
+                userId: userId,
+                priceId: priceId,
+                type: isSubscription ? 'subscription' : 'coins'
+            }
+        };
+        
+        if (userEmail) {
+            sessionConfig.customer_email = userEmail;
+        }
+        
+        const session = await stripe.checkout.sessions.create(sessionConfig);
+        
+        res.json({ url: session.url, sessionId: session.id });
     } catch (error) {
-        console.error('Stripe error:', error);
+        console.error('Checkout session error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
 // Stripe webhook for fulfillment
-app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/webhook', async (req, res) => {
     const sig = req.headers['stripe-signature'];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     
@@ -108,33 +134,135 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
     
+    console.log('Webhook received:', event.type);
+    
     // Handle the event
     switch (event.type) {
         case 'checkout.session.completed':
             const session = event.data.object;
-            await fulfillOrder(session);
+            await handleCheckoutComplete(session);
             break;
             
         case 'customer.subscription.updated':
+            const updatedSub = event.data.object;
+            await handleSubscriptionUpdate(updatedSub);
+            break;
+            
         case 'customer.subscription.deleted':
-            // Handle subscription changes
+            const deletedSub = event.data.object;
+            await handleSubscriptionCanceled(deletedSub);
+            break;
+            
+        case 'invoice.payment_succeeded':
+            // Recurring subscription payment
+            const invoice = event.data.object;
+            if (invoice.subscription) {
+                await handleRecurringPayment(invoice);
+            }
             break;
     }
     
     res.json({ received: true });
 });
 
-async function fulfillOrder(session) {
-    const { userId, type, amount, plan } = session.metadata;
+// Handle successful checkout
+async function handleCheckoutComplete(session) {
+    const { userId, priceId, type } = session.metadata;
     
-    // In production, update Firebase here
-    console.log(`Fulfilling order for user ${userId}: ${type} - ${amount || plan}`);
+    if (!userId) {
+        console.error('No userId in session metadata');
+        return;
+    }
     
-    // You would update the user's account in Firebase:
-    // - Add coins for coin purchases
-    // - Set isPremium flag for subscriptions
+    console.log(`Processing checkout for user ${userId}, type: ${type}, priceId: ${priceId}`);
+    
+    try {
+        const userRef = db.ref(`users/${userId}`);
+        
+        if (type === 'subscription') {
+            // Set premium status
+            await userRef.update({
+                isPremium: true,
+                subscriptionId: session.subscription,
+                subscriptionPriceId: priceId,
+                subscriptionStart: admin.database.ServerValue.TIMESTAMP
+            });
+            console.log(`User ${userId} is now premium!`);
+            
+        } else if (type === 'coins') {
+            // Add coins
+            const coinAmount = COIN_AMOUNTS[priceId] || 0;
+            if (coinAmount > 0) {
+                const snapshot = await userRef.child('coins').once('value');
+                const currentCoins = snapshot.val() || 0;
+                await userRef.update({
+                    coins: currentCoins + coinAmount
+                });
+                console.log(`Added ${coinAmount} coins to user ${userId}`);
+            }
+        }
+    } catch (error) {
+        console.error('Error fulfilling order:', error);
+    }
 }
 
+// Handle subscription updates
+async function handleSubscriptionUpdate(subscription) {
+    // Find user by subscription ID
+    const usersRef = db.ref('users');
+    const snapshot = await usersRef.orderByChild('subscriptionId').equalTo(subscription.id).once('value');
+    
+    if (snapshot.exists()) {
+        const userId = Object.keys(snapshot.val())[0];
+        const userRef = db.ref(`users/${userId}`);
+        
+        const isActive = subscription.status === 'active' || subscription.status === 'trialing';
+        await userRef.update({
+            isPremium: isActive,
+            subscriptionStatus: subscription.status
+        });
+        console.log(`Updated subscription status for user ${userId}: ${subscription.status}`);
+    }
+}
+
+// Handle subscription cancellation
+async function handleSubscriptionCanceled(subscription) {
+    const usersRef = db.ref('users');
+    const snapshot = await usersRef.orderByChild('subscriptionId').equalTo(subscription.id).once('value');
+    
+    if (snapshot.exists()) {
+        const userId = Object.keys(snapshot.val())[0];
+        const userRef = db.ref(`users/${userId}`);
+        
+        await userRef.update({
+            isPremium: false,
+            subscriptionStatus: 'canceled'
+        });
+        console.log(`Subscription canceled for user ${userId}`);
+    }
+}
+
+// Handle recurring subscription payment (monthly coin bonus)
+async function handleRecurringPayment(invoice) {
+    if (!invoice.subscription) return;
+    
+    const usersRef = db.ref('users');
+    const snapshot = await usersRef.orderByChild('subscriptionId').equalTo(invoice.subscription).once('value');
+    
+    if (snapshot.exists()) {
+        const userId = Object.keys(snapshot.val())[0];
+        const userRef = db.ref(`users/${userId}`);
+        
+        // Give monthly bonus coins (500)
+        const coinSnapshot = await userRef.child('coins').once('value');
+        const currentCoins = coinSnapshot.val() || 0;
+        await userRef.update({
+            coins: currentCoins + 500,
+            lastCoinGrant: admin.database.ServerValue.TIMESTAMP
+        });
+        console.log(`Monthly bonus: Added 500 coins to premium user ${userId}`);
+    }
+}
 // ============================================
 // SOCKET.IO MULTIPLAYER
 // ============================================
