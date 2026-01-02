@@ -1061,6 +1061,20 @@ function loadRatingsDisplay() {
     });
 }
 
+// Show Buy Coins section in shop
+function showBuyCoins() {
+    // Navigate to shop if not there
+    navigateTo('shop');
+    
+    // Click the Buy Coins tab
+    setTimeout(() => {
+        const coinsTab = document.querySelector('.shop-nav-btn[data-category="coins"]');
+        if (coinsTab) {
+            coinsTab.click();
+        }
+    }, 100);
+}
+
 // Global functions for HTML onclick handlers
 window.navigateTo = navigateTo;
 window.startQuickGame = startQuickGame;
@@ -1071,6 +1085,7 @@ window.showInfoTab = showInfoTab;
 window.showGameRules = showGameRules;
 window.subscribe = subscribe;
 window.buyCoins = buyCoins;
+window.showBuyCoins = showBuyCoins;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
