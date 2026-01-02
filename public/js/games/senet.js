@@ -13,10 +13,14 @@ class SenetGame {
         this.canvas.width = this.cellSize * 10 + this.boardPadding * 2;
         this.canvas.height = this.cellSize * 3 + this.boardPadding * 2;
         
-        // Get equipped skins
+        // Get equipped skins - board must match this game (senet)
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
-        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        
+        // Only apply board skin if it's for this game (contains 'senet')
+        const boardColors = (equippedBoard && equippedBoard.includes('senet')) 
+            ? window.ShopAssets?.getColors(equippedBoard) 
+            : null;
         const pieceColors = window.ShopAssets?.getColors(equippedPieces);
         
         this.colors = {

@@ -17,10 +17,14 @@ class MancalaGame {
         this.storeHeight = 200;
         this.padding = 30;
         
-        // Get equipped skins
+        // Get equipped skins - board must match this game (mancala)
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
-        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        
+        // Only apply board skin if it's for this game (contains 'mancala')
+        const boardColors = (equippedBoard && equippedBoard.includes('mancala')) 
+            ? window.ShopAssets?.getColors(equippedBoard) 
+            : null;
         const pieceColors = window.ShopAssets?.getColors(equippedPieces);
         
         this.colors = {

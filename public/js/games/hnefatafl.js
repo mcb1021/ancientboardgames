@@ -14,10 +14,14 @@ class HnefataflGame {
         this.canvas.width = this.cellSize * this.boardSize + this.boardPadding * 2;
         this.canvas.height = this.cellSize * this.boardSize + this.boardPadding * 2;
         
-        // Get equipped skins
+        // Get equipped skins - board must match this game (hnef)
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
-        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        
+        // Only apply board skin if it's for this game (contains 'hnef')
+        const boardColors = (equippedBoard && equippedBoard.includes('hnef')) 
+            ? window.ShopAssets?.getColors(equippedBoard) 
+            : null;
         const pieceColors = window.ShopAssets?.getColors(equippedPieces);
         
         this.colors = {

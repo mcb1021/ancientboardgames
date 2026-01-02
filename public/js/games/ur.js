@@ -24,10 +24,14 @@ class UrGame {
         // Game state
         this.reset();
         
-        // Get equipped skins
+        // Get equipped skins - board must match this game (ur)
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
-        const boardColors = window.ShopAssets?.getColors(equippedBoard);
+        
+        // Only apply board skin if it's for this game (contains 'ur')
+        const boardColors = (equippedBoard && equippedBoard.includes('_ur')) 
+            ? window.ShopAssets?.getColors(equippedBoard) 
+            : null;
         const pieceColors = window.ShopAssets?.getColors(equippedPieces);
         
         // Colors - use equipped or defaults
