@@ -402,26 +402,22 @@ const ShopAssets = {
 
     // Get SVG for an item
     getSVG(itemId) {
-        const category = itemId.split('_')[0];
-        let items;
-        if (category === 'board') items = this.boards;
-        else if (category === 'piece') items = this.pieces;
-        else if (category === 'avatar') items = this.avatars;
-        
-        return items?.[itemId]?.svg || null;
+        // Check all categories
+        if (this.boards[itemId]) return this.boards[itemId].svg;
+        if (this.pieces[itemId]) return this.pieces[itemId].svg;
+        if (this.avatars[itemId]) return this.avatars[itemId].svg;
+        return null;
     },
 
     // Get colors for game rendering
     getColors(itemId) {
-        const category = itemId.split('_')[0];
-        let items;
-        if (category === 'board') items = this.boards;
-        else if (category === 'piece') items = this.pieces;
-        else if (category === 'avatar') items = this.avatars;
-        
-        return items?.[itemId]?.colors || null;
+        if (this.boards[itemId]) return this.boards[itemId].colors;
+        if (this.pieces[itemId]) return this.pieces[itemId].colors;
+        if (this.avatars[itemId]) return this.avatars[itemId].colors;
+        return null;
     }
 };
 
 // Make globally available
 window.ShopAssets = ShopAssets;
+console.log('ShopAssets loaded, boards:', Object.keys(ShopAssets.boards));
