@@ -42,13 +42,28 @@ const Auth = {
         const coinCount = Utils.$('.coin-count');
         
         if (user) {
-            // User is signed in
-            authBtn.classList.add('hidden');
-            userInfo.classList.remove('hidden');
+            // Check if this is an anonymous user who hasn't explicitly signed in this session
+            // We use sessionStorage to track if user explicitly chose guest this session
+            const guestChosenThisSession = sessionStorage.getItem('guestChosen');
+            const googleUser = !user.isAnonymous;
+            
+            // If anonymous and didn't choose guest this session, sign them out and show modal
+            if (user.isAnonymous && !guestChosenThisSession) {
+                await firebase.auth().signOut();
+                return;
+            }
+            
+            // User is signed in (either Google or explicitly chose guest)
+            authBtn?.classList.add('hidden');
+            userInfo?.classList.remove('hidden');
             
             // Set user display info
-            userAvatar.src = user.photoURL || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%232A241C"/><circle cx="50" cy="40" r="20" fill="%23D4AF37"/><ellipse cx="50" cy="85" rx="35" ry="25" fill="%23D4AF37"/></svg>';
-            userName.textContent = user.displayName || 'Player';
+            if (userAvatar) {
+                userAvatar.src = user.photoURL || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%232A241C"/><circle cx="50" cy="40" r="20" fill="%23D4AF37"/><ellipse cx="50" cy="85" rx="35" ry="25" fill="%23D4AF37"/></svg>';
+            }
+            if (userName) {
+                userName.textContent = user.displayName || 'Player';
+            }
             
             // Load or create user profile
             await this.loadUserProfile(user);
@@ -63,11 +78,14 @@ const Auth = {
             
             Utils.toast(`Welcome back, ${user.displayName || 'Player'}!`, 'success');
         } else {
-            // User is signed out
-            authBtn.classList.remove('hidden');
-            userInfo.classList.add('hidden');
+            // User is signed out - show auth button
+            authBtn?.classList.remove('hidden');
+            userInfo?.classList.add('hidden');
             this.userProfile = null;
             document.body.classList.remove('premium-user');
+            
+            // Clear guest session flag
+            sessionStorage.removeItem('guestChosen');
         }
         
         // Emit auth change event
@@ -147,6 +165,9 @@ const Auth = {
     // Sign in as guest
     async signInAsGuest() {
         try {
+            // Mark that guest was explicitly chosen this session
+            sessionStorage.setItem('guestChosen', 'true');
+            
             const result = await firebase.auth().signInAnonymously();
             
             // Set a guest display name
@@ -158,6 +179,7 @@ const Auth = {
             Utils.toast('Playing as guest. Sign in to save progress!', 'info');
         } catch (error) {
             console.error('Guest sign in error:', error);
+            sessionStorage.removeItem('guestChosen');
             Utils.toast('Guest login failed. Please try again.', 'error');
         }
     },
@@ -165,6 +187,8 @@ const Auth = {
     // Sign out
     async signOut() {
         try {
+            // Clear guest session flag
+            sessionStorage.removeItem('guestChosen');
             await firebase.auth().signOut();
             Utils.toast('Signed out successfully', 'info');
         } catch (error) {

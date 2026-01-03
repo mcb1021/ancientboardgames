@@ -999,6 +999,9 @@ Utils.$$('.toggle-btn')?.forEach(btn => {
 // ============================================
 
 async function loadProfile() {
+    const signInBtn = Utils.$('#profile-sign-in-btn');
+    const signOutBtn = Utils.$('#profile-sign-out-btn');
+    
     if (!Auth.isSignedIn()) {
         Utils.$('#profile-name').textContent = 'Guest';
         Utils.$('#profile-membership').innerHTML = '<span class="membership-badge free">Sign in to track progress</span>';
@@ -1006,8 +1009,16 @@ async function loadProfile() {
         Utils.$('#profile-games').textContent = '0';
         Utils.$('#profile-wins').textContent = '0';
         Utils.$('#cancel-sub-btn')?.classList.add('hidden');
+        
+        // Show sign in, hide sign out
+        signInBtn?.classList.remove('hidden');
+        signOutBtn?.classList.add('hidden');
         return;
     }
+    
+    // User is signed in - show sign out, hide sign in
+    signInBtn?.classList.add('hidden');
+    signOutBtn?.classList.remove('hidden');
     
     // Refresh profile from Firebase to get latest data
     await Auth.refreshProfile();
@@ -1431,6 +1442,33 @@ function trackGameEnd(isWin, gameKey) {
     });
 }
 
+// ============================================
+// AUTHENTICATION FUNCTIONS
+// ============================================
+
+function showSignInOptions() {
+    Utils.showModal('auth-modal');
+}
+
+async function signOut() {
+    try {
+        await firebase.auth().signOut();
+        Utils.toast('Signed out successfully', 'success');
+        
+        // Update UI
+        Utils.$('#user-info')?.classList.add('hidden');
+        Utils.$('#auth-btn')?.classList.remove('hidden');
+        
+        // Refresh profile page if on it
+        if (currentPage === 'profile') {
+            loadProfile();
+        }
+    } catch (error) {
+        console.error('Sign out error:', error);
+        Utils.toast('Failed to sign out', 'error');
+    }
+}
+
 // Toggle sound on/off
 function toggleSound() {
     const btn = Utils.$('#sound-toggle');
@@ -1474,6 +1512,8 @@ window.buyCoins = buyCoins;
 window.showBuyCoins = showBuyCoins;
 window.cancelSubscription = cancelSubscription;
 window.toggleSound = toggleSound;
+window.showSignInOptions = showSignInOptions;
+window.signOut = signOut;
 window.shareTwitter = shareTwitter;
 window.shareFacebook = shareFacebook;
 window.copyShareLink = copyShareLink;
