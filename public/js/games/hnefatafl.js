@@ -117,8 +117,18 @@ class HnefataflGame {
         return (r === 0 || r === 10) && (c === 0 || c === 10);
     }
     
-    makeMove(fromR, fromC, toR, toC) {
+    makeMove(fromR, fromC, toR, toC, isRemote = false) {
         const piece = this.board[fromR][fromC];
+        
+        // Emit move to server if online mode
+        if (this.options.mode === 'online' && !isRemote && this.currentPlayer === this.options.playerSide) {
+            window.socket?.emit('game-move', {
+                roomId: this.options.roomId,
+                move: { fromR, fromC, toR, toC },
+                gameState: this.getState()
+            });
+        }
+        
         this.board[fromR][fromC] = 0;
         this.board[toR][toC] = piece;
         
@@ -451,6 +461,18 @@ class HnefataflGame {
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    
+    getState() {
+        return {
+            board: this.board.map(row => [...row]),
+            currentPlayer: this.currentPlayer,
+            kingPos: {...this.kingPos}
+        };
+    }
+    
+    receiveMove(move) {
+        this.makeMove(move.fromR, move.fromC, move.toR, move.toC, true);
     }
 }
 

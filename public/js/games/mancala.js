@@ -124,7 +124,7 @@ class MancalaGame {
     }
     
     // Make a move
-    async makeMove(pitIndex) {
+    async makeMove(pitIndex, isRemote = false) {
         if (this.animating || this.gameOver) return false;
         
         const player = this.currentPlayer;
@@ -134,6 +134,15 @@ class MancalaGame {
         // Pick up seeds - play move sound
         let seeds = this.pits[pitIndex];
         if (seeds === 0) return false;
+        
+        // Emit move to server if online mode
+        if (this.options.mode === 'online' && !isRemote && player === this.options.playerSide) {
+            window.socket?.emit('game-move', {
+                roomId: this.options.roomId,
+                move: { pitIndex },
+                gameState: this.getState()
+            });
+        }
         
         window.SoundManager?.play('move');
         
@@ -510,6 +519,17 @@ class MancalaGame {
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    
+    getState() {
+        return {
+            pits: [...this.pits],
+            currentPlayer: this.currentPlayer
+        };
+    }
+    
+    receiveMove(move) {
+        this.makeMove(move.pitIndex, true);
     }
 }
 

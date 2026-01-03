@@ -274,10 +274,19 @@ class UrGame {
     }
     
     // Make a move
-    makeMove(move) {
+    makeMove(move, isRemote = false) {
         if (this.animating || this.gameOver) return false;
         
         const player = this.currentPlayer;
+        
+        // Emit move to server if online mode and local player made the move
+        if (this.options.mode === 'online' && !isRemote && player === this.options.playerSide) {
+            window.socket?.emit('game-move', {
+                roomId: this.options.roomId,
+                move: move,
+                gameState: this.getState()
+            });
+        }
         
         // Handle capture
         if (move.captures !== null) {
@@ -870,6 +879,28 @@ class UrGame {
         this.canvas.removeEventListener('mousemove', this.boundHandleMouseMove);
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    
+    // Get game state for syncing
+    getState() {
+        return {
+            pieces: JSON.parse(JSON.stringify(this.pieces)),
+            currentPlayer: this.currentPlayer,
+            diceResult: this.diceResult,
+            moveHistory: [...this.moveHistory]
+        };
+    }
+    
+    // Receive move from opponent (multiplayer)
+    receiveMove(move) {
+        this.makeMove(move, true);
+    }
+    
+    // Receive dice roll from opponent
+    receiveDiceRoll(result) {
+        this.diceResult = result;
+        this.calculateValidMoves();
+        this.render();
     }
 }
 

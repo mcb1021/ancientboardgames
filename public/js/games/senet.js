@@ -144,9 +144,18 @@ class SenetGame {
         return this.pieces[player].includes(pos - 1) || this.pieces[player].includes(pos + 1);
     }
     
-    makeMove(move) {
+    makeMove(move, isRemote = false) {
         const player = this.currentPlayer;
         const opponent = player === 1 ? 2 : 1;
+        
+        // Emit move to server if online mode
+        if (this.options.mode === 'online' && !isRemote && player === this.options.playerSide) {
+            window.socket?.emit('game-move', {
+                roomId: this.options.roomId,
+                move: move,
+                gameState: this.getState()
+            });
+        }
         
         if (move.swap !== undefined) {
             // Swap positions - like a capture
@@ -297,6 +306,18 @@ class SenetGame {
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    
+    getState() {
+        return {
+            pieces: JSON.parse(JSON.stringify(this.pieces)),
+            currentPlayer: this.currentPlayer,
+            diceResult: this.diceResult
+        };
+    }
+    
+    receiveMove(move) {
+        this.makeMove(move, true);
     }
 }
 

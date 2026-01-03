@@ -185,10 +185,19 @@ class MorrisGame {
         }
     }
     
-    makeMove(move) {
+    makeMove(move, isRemote = false) {
         const player = this.currentPlayer;
         const opponent = player === 1 ? 2 : 1;
         let formedMill = false;
+        
+        // Emit move to server if online mode and local player made the move
+        if (this.options.mode === 'online' && !isRemote && player === this.options.playerSide) {
+            window.socket?.emit('game-move', {
+                roomId: this.options.roomId,
+                move: move,
+                gameState: this.getState()
+            });
+        }
         
         if (move.type === 'remove') {
             this.board[move.pos] = 0;
@@ -368,6 +377,8 @@ class MorrisGame {
     handleClick(e) {
         if (this.gameOver) return;
         if (this.options.mode === 'ai' && this.currentPlayer !== this.options.playerSide) return;
+        // In online mode, only allow clicks on your turn
+        if (this.options.mode === 'online' && this.currentPlayer !== this.options.playerSide) return;
         
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -580,6 +591,24 @@ class MorrisGame {
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    
+    // Get game state for syncing
+    getState() {
+        return {
+            board: [...this.board],
+            currentPlayer: this.currentPlayer,
+            phase: this.phase,
+            piecesToPlace: {...this.piecesToPlace},
+            piecesOnBoard: {...this.piecesOnBoard},
+            mustRemove: this.mustRemove,
+            selectedPiece: this.selectedPiece
+        };
+    }
+    
+    // Receive move from opponent (multiplayer)
+    receiveMove(move) {
+        this.makeMove(move, true);
     }
 }
 
