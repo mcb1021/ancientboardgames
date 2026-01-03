@@ -308,6 +308,7 @@ class SenetGame {
     onGameEnd(winner) {
         const isWin = winner === this.options.playerSide;
         window.SoundManager?.play(isWin ? 'win' : 'lose');
+        window.stopTurnTimer?.();
         
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
@@ -315,8 +316,15 @@ class SenetGame {
             content.innerHTML = `
                 <h2 style="color: ${isWin ? '#D4AF37' : '#8B2500'}">${isWin ? '🏆 Victory!' : 'Defeat'}</h2>
                 <p>Your soul has ${isWin ? 'passed' : 'failed'} through the afterlife!</p>
+                ${window.getShareButtons?.(isWin) || ''}
                 <button class="btn-primary" onclick="window.currentGame.reset(); window.currentGame.render(); Utils.hideModal('game-end-modal');">Play Again</button>
+                <button class="btn-secondary" onclick="navigateTo('games')">Choose Game</button>
             `;
+        }
+        
+        // Update stats if signed in
+        if (Auth.isSignedIn()) {
+            Auth.updateStats(isWin);
         }
     }
     

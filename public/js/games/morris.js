@@ -596,6 +596,7 @@ class MorrisGame {
         // Play win/lose sound
         const isWin = winner === this.options.playerSide;
         window.SoundManager?.play(isWin ? 'win' : 'lose');
+        window.stopTurnTimer?.();
         
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
@@ -603,8 +604,15 @@ class MorrisGame {
             content.innerHTML = `
                 <h2 style="color: ${isWin ? '#D4AF37' : '#8B2500'}">${isWin ? '🏆 Victory!' : 'Defeat'}</h2>
                 <p>${winner === 1 ? 'White' : 'Black'} wins!</p>
+                ${window.getShareButtons?.(isWin) || ''}
                 <button class="btn-primary" onclick="window.currentGame.reset(); window.currentGame.render(); Utils.hideModal('game-end-modal');">Play Again</button>
+                <button class="btn-secondary" onclick="navigateTo('games')">Choose Game</button>
             `;
+        }
+        
+        // Update stats if signed in
+        if (Auth.isSignedIn()) {
+            Auth.updateStats(isWin);
         }
     }
     

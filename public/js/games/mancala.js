@@ -510,6 +510,7 @@ class MancalaGame {
         // Play win/lose sound
         const isWin = winner === this.options.playerSide;
         window.SoundManager?.play(winner === 0 ? 'move' : (isWin ? 'win' : 'lose'));
+        window.stopTurnTimer?.();
         
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
@@ -530,8 +531,15 @@ class MancalaGame {
             content.innerHTML = `
                 <h2 style="color: ${resultColor}">${resultText}</h2>
                 <p>Final Score: You ${this.pits[this.options.playerSide === 1 ? 6 : 13]} - ${this.pits[this.options.playerSide === 1 ? 13 : 6]} Opponent</p>
+                ${window.getShareButtons?.(isWin) || ''}
                 <button class="btn-primary" onclick="window.currentGame.reset(); window.currentGame.render(); Utils.hideModal('game-end-modal');">Play Again</button>
+                <button class="btn-secondary" onclick="navigateTo('games')">Choose Game</button>
             `;
+        }
+        
+        // Update stats if signed in (ties don't count as win or loss)
+        if (Auth.isSignedIn() && winner !== 0) {
+            Auth.updateStats(isWin);
         }
     }
     

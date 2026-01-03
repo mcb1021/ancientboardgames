@@ -465,6 +465,7 @@ class HnefataflGame {
         const isWin = (winner === 1 && this.options.playerSide === 1) || 
                       (winner === 2 && this.options.playerSide === 2);
         window.SoundManager?.play(isWin ? 'win' : 'lose');
+        window.stopTurnTimer?.();
         
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
@@ -472,8 +473,15 @@ class HnefataflGame {
             content.innerHTML = `
                 <h2 style="color: ${isWin ? '#D4AF37' : '#8B2500'}">${isWin ? '🏆 Victory!' : 'Defeat'}</h2>
                 <p>${winner === 1 ? 'The King has been captured!' : 'The King has escaped!'}</p>
+                ${window.getShareButtons?.(isWin) || ''}
                 <button class="btn-primary" onclick="window.currentGame.reset(); window.currentGame.render(); Utils.hideModal('game-end-modal');">Play Again</button>
+                <button class="btn-secondary" onclick="navigateTo('games')">Choose Game</button>
             `;
+        }
+        
+        // Update stats if signed in
+        if (Auth.isSignedIn()) {
+            Auth.updateStats(isWin);
         }
     }
     

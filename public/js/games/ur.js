@@ -858,6 +858,9 @@ class UrGame {
         // Play win/lose sound
         window.SoundManager?.play(isPlayerWin ? 'win' : 'lose');
         
+        // Stop timer
+        window.stopTurnTimer?.();
+        
         // Show result modal
         const modal = Utils.$('#game-end-modal');
         const content = Utils.$('#game-end-content');
@@ -874,6 +877,7 @@ class UrGame {
                             <span class="result-stat-label">Moves</span>
                         </div>
                     </div>
+                    ${window.getShareButtons?.(isPlayerWin) || ''}
                     <div class="result-actions">
                         <button class="btn-primary" onclick="window.currentGame.reset(); window.currentGame.render(); Utils.hideModal('game-end-modal');">
                             Play Again
