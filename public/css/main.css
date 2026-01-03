@@ -2415,3 +2415,44 @@ body.desktop-view .game-sidebar { display: flex; }
     color: var(--text-muted);
     margin-left: var(--space-sm);
 }
+
+/* Sign In/Out Buttons on Profile */
+.btn-sign-in {
+    background: #4285F4;
+    color: white;
+    border: none;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-top: var(--space-sm);
+    font-size: 0.9rem;
+    width: 100%;
+    transition: background 0.3s ease;
+}
+
+.btn-sign-in:hover {
+    background: #3367D6;
+}
+
+.btn-sign-out {
+    background: transparent;
+    border: 1px solid var(--text-muted);
+    color: var(--text-muted);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-top: var(--space-sm);
+    font-size: 0.9rem;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.btn-sign-out:hover {
+    border-color: #CD5C5C;
+    color: #CD5C5C;
+}
+
+.btn-sign-in.hidden,
+.btn-sign-out.hidden {
+    display: none;
+}
