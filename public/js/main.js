@@ -652,6 +652,9 @@ function initSocket() {
             reconnection: true
         });
         
+        // Expose socket globally for games to emit moves
+        window.socket = socket;
+        
         socket.on('connect', () => {
             console.log('Connected to game server');
             updateOnlineCount();
@@ -671,9 +674,12 @@ function initSocket() {
         });
         
         socket.on('opponent-move', (data) => {
-            if (currentGame) {
-                // Handle opponent's move
-                currentGame.makeMove(data.move);
+            if (currentGame && currentGame.receiveMove) {
+                // Use receiveMove for proper remote move handling
+                currentGame.receiveMove(data.move);
+            } else if (currentGame) {
+                // Fallback
+                currentGame.makeMove(data.move, true);
             }
         });
         
@@ -793,6 +799,26 @@ function startMultiplayerGame(data) {
     });
     
     window.currentGame = currentGame;
+    
+    // Update player names for multiplayer
+    const player1Panel = Utils.$('.player-1 .player-name');
+    const player2Panel = Utils.$('.player-2 .player-name');
+    
+    if (data.players && data.players.length === 2) {
+        const me = data.players.find(p => p.side === data.playerSide);
+        const opponent = data.players.find(p => p.side !== data.playerSide);
+        
+        if (player1Panel) player1Panel.textContent = me?.name || 'You';
+        if (player2Panel) player2Panel.textContent = opponent?.name || 'Opponent';
+    }
+    
+    // Update game status
+    const status = Utils.$('#game-status');
+    if (status) {
+        status.textContent = `Playing: ${gameConfig.name} (Online)`;
+    }
+    
+    Utils.toast('Game started! Good luck!', 'success');
 }
 
 // Quick match
