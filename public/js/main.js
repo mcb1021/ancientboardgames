@@ -1257,15 +1257,18 @@ function startTurnTimer() {
     turnTimeRemaining = turnTimeLimit;
     updateTimerDisplay();
     
-    turnTimer = setInterval(() => {
-        turnTimeRemaining--;
-        updateTimerDisplay();
-        
-        if (turnTimeRemaining <= 0) {
-            stopTurnTimer();
-            handleTimerExpired();
-        }
-    }, 1000);
+    // Only start ticking if it's MY turn
+    if (isMyTurn()) {
+        turnTimer = setInterval(() => {
+            turnTimeRemaining--;
+            updateTimerDisplay();
+            
+            if (turnTimeRemaining <= 0) {
+                stopTurnTimer();
+                handleTimerExpired();
+            }
+        }, 1000);
+    }
 }
 
 function stopTurnTimer() {
@@ -1275,10 +1278,37 @@ function stopTurnTimer() {
     }
 }
 
-function resetTurnTimer() {
-    if (turnTimeLimit > 0) {
-        startTurnTimer();
+// Call this when turn switches - resets timer and starts/stops based on whose turn
+function onTurnChange() {
+    if (turnTimeLimit <= 0) return;
+    
+    stopTurnTimer();
+    turnTimeRemaining = turnTimeLimit;
+    updateTimerDisplay();
+    
+    // Only tick if it's my turn now
+    if (isMyTurn()) {
+        turnTimer = setInterval(() => {
+            turnTimeRemaining--;
+            updateTimerDisplay();
+            
+            if (turnTimeRemaining <= 0) {
+                stopTurnTimer();
+                handleTimerExpired();
+            }
+        }, 1000);
     }
+}
+
+// Check if it's currently my turn
+function isMyTurn() {
+    if (!currentGame) return false;
+    return currentGame.currentPlayer === currentGame.options?.playerSide;
+}
+
+function resetTurnTimer() {
+    // Called after a move - trigger turn change logic
+    onTurnChange();
 }
 
 function updateTimerDisplay() {
@@ -1289,10 +1319,13 @@ function updateTimerDisplay() {
         timerValue.textContent = turnTimeRemaining;
         timerValue.classList.remove('warning', 'critical');
         
-        if (turnTimeRemaining <= 10) {
-            timerValue.classList.add('critical');
-        } else if (turnTimeRemaining <= 20) {
-            timerValue.classList.add('warning');
+        // Only show warning colors if it's my turn
+        if (isMyTurn()) {
+            if (turnTimeRemaining <= 10) {
+                timerValue.classList.add('critical');
+            } else if (turnTimeRemaining <= 20) {
+                timerValue.classList.add('warning');
+            }
         }
     }
     
@@ -1301,10 +1334,13 @@ function updateTimerDisplay() {
         timerFill.style.width = percent + '%';
         timerFill.classList.remove('warning', 'critical');
         
-        if (turnTimeRemaining <= 10) {
-            timerFill.classList.add('critical');
-        } else if (turnTimeRemaining <= 20) {
-            timerFill.classList.add('warning');
+        // Only show warning colors if it's my turn
+        if (isMyTurn()) {
+            if (turnTimeRemaining <= 10) {
+                timerFill.classList.add('critical');
+            } else if (turnTimeRemaining <= 20) {
+                timerFill.classList.add('warning');
+            }
         }
     }
 }
@@ -1547,6 +1583,7 @@ window.signOut = signOut;
 window.shareTwitter = shareTwitter;
 window.shareFacebook = shareFacebook;
 window.copyShareLink = copyShareLink;
+window.onTurnChange = onTurnChange;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
