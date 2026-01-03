@@ -28,11 +28,34 @@ class UrGame {
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
         
-        // Only apply board skin if it's for this game (contains 'ur')
+        // Only apply board skin if it's for this game (contains 'ur') - board is personal
         const boardColors = (equippedBoard && equippedBoard.includes('_ur')) 
             ? window.ShopAssets?.getColors(equippedBoard) 
             : null;
-        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get MY piece colors
+        const myPieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get OPPONENT's piece colors (from multiplayer options)
+        const opponentPieceColors = this.options.opponentPieces 
+            ? window.ShopAssets?.getColors(this.options.opponentPieces)
+            : null;
+        
+        // Assign colors based on which side I am
+        let player1Color, player1Border, player2Color, player2Border;
+        if (this.options.playerSide === 1) {
+            // I'm player 1 - my colors are player1, opponent's are player2
+            player1Color = myPieceColors?.primary || '#F5E6C8';
+            player1Border = myPieceColors?.secondary || '#C9B896';
+            player2Color = opponentPieceColors?.primary || '#1A1A1A';
+            player2Border = opponentPieceColors?.secondary || '#444444';
+        } else {
+            // I'm player 2 - opponent's colors are player1, my colors are player2
+            player1Color = opponentPieceColors?.primary || '#F5E6C8';
+            player1Border = opponentPieceColors?.secondary || '#C9B896';
+            player2Color = myPieceColors?.primary || '#1A1A1A';
+            player2Border = myPieceColors?.secondary || '#444444';
+        }
         
         // Colors - use equipped or defaults
         this.colors = {
@@ -42,10 +65,10 @@ class UrGame {
             cellBorder: boardColors?.accent || '#6B5344',
             rosette: '#D4AF37',
             rosetteGlow: 'rgba(212, 175, 55, 0.3)',
-            player1: pieceColors?.primary || '#F5E6C8',
-            player1Border: pieceColors?.secondary || '#C9B896',
-            player2: '#1A1A1A',
-            player2Border: '#444444',
+            player1: player1Color,
+            player1Border: player1Border,
+            player2: player2Color,
+            player2Border: player2Border,
             highlight: 'rgba(74, 124, 78, 0.5)',
             validMove: 'rgba(212, 175, 55, 0.4)'
         };

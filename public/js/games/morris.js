@@ -17,19 +17,39 @@ class MorrisGame {
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
         
-        // Only apply board skin if it's for this game (contains 'morris')
+        // Only apply board skin if it's for this game (contains 'morris') - board is personal
         const boardColors = (equippedBoard && equippedBoard.includes('morris')) 
             ? window.ShopAssets?.getColors(equippedBoard) 
             : null;
-        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get MY piece colors
+        const myPieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get OPPONENT's piece colors (from multiplayer options)
+        const opponentPieceColors = this.options.opponentPieces 
+            ? window.ShopAssets?.getColors(this.options.opponentPieces)
+            : null;
+        
+        // Assign colors based on which side I am
+        // Player 1 = white/light side, Player 2 = black/dark side
+        let player1Color, player2Color;
+        if (this.options.playerSide === 1) {
+            // I'm player 1 - my colors are player1, opponent's are player2
+            player1Color = myPieceColors?.primary || '#F5F5DC';
+            player2Color = opponentPieceColors?.primary || '#2C2C2C';
+        } else {
+            // I'm player 2 - opponent's colors are player1, my colors are player2
+            player1Color = opponentPieceColors?.primary || '#F5F5DC';
+            player2Color = myPieceColors?.primary || '#2C2C2C';
+        }
         
         this.colors = {
             board: boardColors?.primary || '#4A1C1C',
             lines: boardColors?.secondary || '#8B4513',
             point: boardColors?.accent || '#CD853F',
             pointHighlight: '#FFD700',
-            player1: pieceColors?.primary || '#F5F5DC',
-            player2: '#2C2C2C',
+            player1: player1Color,
+            player2: player2Color,
             mill: 'rgba(212, 175, 55, 0.5)',
             validMove: 'rgba(74, 124, 78, 0.5)'
         };

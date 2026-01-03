@@ -21,11 +21,30 @@ class MancalaGame {
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
         
-        // Only apply board skin if it's for this game (contains 'mancala')
+        // Only apply board skin if it's for this game (contains 'mancala') - board is personal
         const boardColors = (equippedBoard && equippedBoard.includes('mancala')) 
             ? window.ShopAssets?.getColors(equippedBoard) 
             : null;
-        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get MY piece colors (seeds in Mancala)
+        const myPieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get OPPONENT's piece colors (from multiplayer options)
+        const opponentPieceColors = this.options.opponentPieces 
+            ? window.ShopAssets?.getColors(this.options.opponentPieces)
+            : null;
+        
+        // In Mancala, seeds are shared but we can color the player sides
+        let player1Color, player2Color, seedColor;
+        if (this.options.playerSide === 1) {
+            player1Color = myPieceColors?.secondary || '#E8D5A3';
+            player2Color = opponentPieceColors?.secondary || '#8B7355';
+            seedColor = myPieceColors?.primary || '#C9A86C';
+        } else {
+            player1Color = opponentPieceColors?.secondary || '#E8D5A3';
+            player2Color = myPieceColors?.secondary || '#8B7355';
+            seedColor = myPieceColors?.primary || '#C9A86C';
+        }
         
         this.colors = {
             board: boardColors?.primary || '#3D2914',
@@ -33,10 +52,10 @@ class MancalaGame {
             pit: '#2A1F14',
             pitHighlight: '#4A3728',
             store: '#1A1510',
-            seed: pieceColors?.primary || '#C9A86C',
-            seedHighlight: pieceColors?.highlight || '#FFD700',
-            player1: '#E8D5A3',
-            player2: '#8B7355',
+            seed: seedColor,
+            seedHighlight: myPieceColors?.highlight || '#FFD700',
+            player1: player1Color,
+            player2: player2Color,
             validMove: 'rgba(74, 124, 78, 0.4)'
         };
         

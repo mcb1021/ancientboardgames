@@ -18,11 +18,30 @@ class HnefataflGame {
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
         
-        // Only apply board skin if it's for this game (contains 'hnef')
+        // Only apply board skin if it's for this game (contains 'hnef') - board is personal
         const boardColors = (equippedBoard && equippedBoard.includes('hnef')) 
             ? window.ShopAssets?.getColors(equippedBoard) 
             : null;
-        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get MY piece colors
+        const myPieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get OPPONENT's piece colors (from multiplayer options)
+        const opponentPieceColors = this.options.opponentPieces 
+            ? window.ShopAssets?.getColors(this.options.opponentPieces)
+            : null;
+        
+        // Hnefatafl: Player 1 = Attackers (black), Player 2 = Defenders (white)
+        let attackerColor, defenderColor;
+        if (this.options.playerSide === 1) {
+            // I'm attackers - my colors, opponent's are defenders
+            attackerColor = myPieceColors?.primary || '#1A1A1A';
+            defenderColor = opponentPieceColors?.primary || '#F5F5DC';
+        } else {
+            // I'm defenders - opponent's are attackers, my colors are defenders
+            attackerColor = opponentPieceColors?.primary || '#1A1A1A';
+            defenderColor = myPieceColors?.primary || '#F5F5DC';
+        }
         
         this.colors = {
             board: boardColors?.primary || '#2F4858',
@@ -30,8 +49,8 @@ class HnefataflGame {
             cellDark: '#2A4A5A',
             corner: '#1A3040',
             throne: boardColors?.accent || '#D4AF37',
-            attacker: '#1A1A1A',
-            defender: pieceColors?.primary || '#F5F5DC',
+            attacker: attackerColor,
+            defender: defenderColor,
             king: '#FFD700',
             highlight: 'rgba(212, 175, 55, 0.4)',
             selected: 'rgba(74, 124, 78, 0.5)'

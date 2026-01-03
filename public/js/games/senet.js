@@ -17,18 +17,35 @@ class SenetGame {
         const equippedBoard = Auth.getEquipped?.('board') || null;
         const equippedPieces = Auth.getEquipped?.('piece') || null;
         
-        // Only apply board skin if it's for this game (contains 'senet')
+        // Only apply board skin if it's for this game (contains 'senet') - board is personal
         const boardColors = (equippedBoard && equippedBoard.includes('senet')) 
             ? window.ShopAssets?.getColors(equippedBoard) 
             : null;
-        const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get MY piece colors
+        const myPieceColors = window.ShopAssets?.getColors(equippedPieces);
+        
+        // Get OPPONENT's piece colors (from multiplayer options)
+        const opponentPieceColors = this.options.opponentPieces 
+            ? window.ShopAssets?.getColors(this.options.opponentPieces)
+            : null;
+        
+        // Assign colors based on which side I am
+        let player1Color, player2Color;
+        if (this.options.playerSide === 1) {
+            player1Color = myPieceColors?.primary || '#F5F5DC';
+            player2Color = opponentPieceColors?.primary || '#2C2C2C';
+        } else {
+            player1Color = opponentPieceColors?.primary || '#F5F5DC';
+            player2Color = myPieceColors?.primary || '#2C2C2C';
+        }
         
         this.colors = {
             board: boardColors?.primary || '#C9A86C',
             cell: boardColors?.secondary || '#E8D5A3',
             cellBorder: boardColors?.accent || '#8B7355',
-            player1: pieceColors?.primary || '#F5F5DC',
-            player2: '#2C2C2C',
+            player1: player1Color,
+            player2: player2Color,
             special: '#1E3A5F',
             highlight: 'rgba(30, 58, 95, 0.4)'
         };
