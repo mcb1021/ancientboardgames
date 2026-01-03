@@ -348,16 +348,25 @@
                             </div>
                             <div class="player-pieces"></div>
                         </div>
+                        <div class="game-timer-container hidden" id="game-timer-container">
+                            <div class="timer-display">
+                                <span class="timer-icon">⏱️</span>
+                                <span class="timer-value" id="turn-timer">60</span>
+                            </div>
+                            <div class="timer-bar">
+                                <div class="timer-fill" id="timer-fill"></div>
+                            </div>
+                        </div>
                         <div class="game-controls">
                             <button class="control-btn" id="roll-dice-btn">
                                 <span class="btn-icon">🎲</span>
                                 <span>Roll Dice</span>
                             </button>
-                            <button class="control-btn" id="rules-btn">
+                            <button class="control-btn" id="rules-btn" onclick="showCurrentGameRules()">
                                 <span class="btn-icon">📜</span>
                                 <span>Rules</span>
                             </button>
-                            <button class="control-btn" id="resign-btn">
+                            <button class="control-btn" id="resign-btn" onclick="resignGame()">
                                 <span class="btn-icon">🏳️</span>
                                 <span>Resign</span>
                             </button>
@@ -392,6 +401,16 @@
                         <div class="form-group">
                             <label>Room Name</label>
                             <input type="text" id="room-name-input" placeholder="My Ancient Game Room">
+                        </div>
+                        <div class="form-group">
+                            <label>Turn Time Limit</label>
+                            <select id="time-limit-select">
+                                <option value="30">30 seconds</option>
+                                <option value="60" selected>1 minute</option>
+                                <option value="120">2 minutes</option>
+                                <option value="300">5 minutes</option>
+                                <option value="0">No limit</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>Mode</label>
