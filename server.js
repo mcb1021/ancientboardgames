@@ -129,6 +129,47 @@ app.post('/api/create-checkout-session', async (req, res) => {
     }
 });
 
+// Cancel subscription endpoint
+app.post('/api/cancel-subscription', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'Missing userId' });
+        }
+        
+        // Get user's subscription ID from Firebase
+        const userSnapshot = await db.ref(`users/${userId}`).once('value');
+        const userData = userSnapshot.val();
+        
+        if (!userData || !userData.subscriptionId) {
+            return res.status(400).json({ error: 'No active subscription found' });
+        }
+        
+        // Cancel the subscription in Stripe (at period end - user keeps access until paid period ends)
+        const subscription = await stripe.subscriptions.update(userData.subscriptionId, {
+            cancel_at_period_end: true
+        });
+        
+        // Update Firebase
+        await db.ref(`users/${userId}`).update({
+            subscriptionStatus: 'canceling',
+            cancelAtPeriodEnd: true
+        });
+        
+        console.log(`Subscription ${userData.subscriptionId} set to cancel at period end for user ${userId}`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Subscription will be canceled at the end of the billing period',
+            cancelAt: subscription.cancel_at
+        });
+    } catch (error) {
+        console.error('Cancel subscription error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Stripe webhook for fulfillment
 app.post('/api/webhook', async (req, res) => {
     const sig = req.headers['stripe-signature'];
