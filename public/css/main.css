@@ -2244,3 +2244,26 @@ body.desktop-view .game-sidebar { display: flex; }
         grid-template-columns: 1fr;
     }
 }
+
+/* Cancel Subscription Button */
+.btn-cancel-sub {
+    background: transparent;
+    border: 1px solid #8B0000;
+    color: #CD5C5C;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-top: var(--space-sm);
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+.btn-cancel-sub:hover {
+    background: rgba(139, 0, 0, 0.2);
+    border-color: #CD5C5C;
+}
+
+.btn-cancel-sub.hidden {
+    display: none;
+}
