@@ -158,11 +158,29 @@ const SoundManager = {
     
     // Play a sound
     play(soundName) {
-        if (!this.enabled || !this.audioContext || !this.sounds[soundName]) {
+        console.log('SoundManager.play called:', soundName, 'enabled:', this.enabled, 'context:', !!this.audioContext, 'sound exists:', !!this.sounds[soundName]);
+        
+        if (!this.enabled) {
+            console.log('Sound disabled');
+            return;
+        }
+        
+        if (!this.audioContext) {
+            console.log('No audio context - initializing...');
+            this.initAudioContext();
+        }
+        
+        if (!this.sounds[soundName]) {
+            console.log('Sound not found:', soundName);
             return;
         }
         
         try {
+            // Resume audio context if suspended (browser policy)
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+            
             const source = this.audioContext.createBufferSource();
             const gainNode = this.audioContext.createGain();
             
@@ -173,6 +191,7 @@ const SoundManager = {
             gainNode.connect(this.audioContext.destination);
             
             source.start(0);
+            console.log('Sound played:', soundName);
         } catch (error) {
             console.error('Error playing sound:', error);
         }

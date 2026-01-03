@@ -1174,6 +1174,34 @@ async function cancelSubscription() {
     }
 }
 
+// Toggle sound on/off
+function toggleSound() {
+    const btn = Utils.$('#sound-toggle');
+    const enabled = window.SoundManager?.toggle();
+    
+    if (btn) {
+        if (enabled) {
+            btn.classList.remove('muted');
+            // Play a test sound to confirm it works
+            window.SoundManager?.play('click');
+        } else {
+            btn.classList.add('muted');
+        }
+    }
+    
+    Utils.toast(enabled ? 'Sound enabled' : 'Sound disabled', 'info');
+}
+
+// Initialize sound button state on load
+function initSoundButton() {
+    const btn = Utils.$('#sound-toggle');
+    if (btn && window.SoundManager) {
+        if (!window.SoundManager.enabled) {
+            btn.classList.add('muted');
+        }
+    }
+}
+
 // Global functions for HTML onclick handlers
 window.navigateTo = navigateTo;
 window.startQuickGame = startQuickGame;
@@ -1186,6 +1214,7 @@ window.subscribe = subscribe;
 window.buyCoins = buyCoins;
 window.showBuyCoins = showBuyCoins;
 window.cancelSubscription = cancelSubscription;
+window.toggleSound = toggleSound;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
@@ -1195,6 +1224,9 @@ window.findQuickMatch = findQuickMatch;
 
 // Event handlers for lobby buttons
 document.addEventListener('DOMContentLoaded', () => {
+    // Init sound button state
+    initSoundButton();
+    
     const createRoomBtn = Utils.$('#create-room-btn');
     if (createRoomBtn) {
         createRoomBtn.addEventListener('click', createRoom);
