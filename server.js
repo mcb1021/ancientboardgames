@@ -450,6 +450,21 @@ io.on('connection', (socket) => {
         room.gameState = data.gameState;
     });
     
+    // Handle turn timeout (skip turn)
+    socket.on('turn-timeout', (data) => {
+        const room = rooms.get(data.roomId);
+        if (!room) return;
+        
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (!player) return;
+        
+        // Notify opponent that turn was skipped
+        socket.to(data.roomId).emit('turn-skipped', {
+            player: data.player,
+            playerName: player.name
+        });
+    });
+    
     // Handle game end
     socket.on('game-end', (data) => {
         const room = rooms.get(data.roomId);
