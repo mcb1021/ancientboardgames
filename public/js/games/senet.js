@@ -172,6 +172,8 @@ class SenetGame {
                 move: move,
                 gameState: this.getState()
             });
+            // Signal turn change for timer
+            window.onTurnChange?.();
         }
         
         if (move.swap !== undefined) {

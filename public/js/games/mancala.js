@@ -161,6 +161,8 @@ class MancalaGame {
                 move: { pitIndex },
                 gameState: this.getState()
             });
+            // Signal turn change for timer
+            window.onTurnChange?.();
         }
         
         window.SoundManager?.play('move');

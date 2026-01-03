@@ -217,6 +217,8 @@ class MorrisGame {
                 move: move,
                 gameState: this.getState()
             });
+            // Signal turn change for timer
+            window.onTurnChange?.();
         }
         
         if (move.type === 'remove') {

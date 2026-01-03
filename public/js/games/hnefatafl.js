@@ -146,6 +146,8 @@ class HnefataflGame {
                 move: { fromR, fromC, toR, toC },
                 gameState: this.getState()
             });
+            // Signal turn change for timer
+            window.onTurnChange?.();
         }
         
         this.board[fromR][fromC] = 0;
