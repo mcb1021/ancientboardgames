@@ -2267,3 +2267,35 @@ body.desktop-view .game-sidebar { display: flex; }
 .btn-cancel-sub.hidden {
     display: none;
 }
+
+/* Sound Toggle Button */
+.sound-toggle {
+    background: transparent;
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    margin-right: var(--space-sm);
+}
+
+.sound-toggle:hover {
+    background: rgba(212, 175, 55, 0.2);
+}
+
+.sound-toggle .sound-off {
+    display: none;
+}
+
+.sound-toggle.muted .sound-on {
+    display: none;
+}
+
+.sound-toggle.muted .sound-off {
+    display: inline;
+}
+
+.sound-toggle .hidden {
+    display: none;
+}
