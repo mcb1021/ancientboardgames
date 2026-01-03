@@ -138,6 +138,9 @@ class UrGame {
     rollDice() {
         if (this.animating || this.gameOver) return;
         
+        // Sound: dice roll
+        window.SoundManager?.play('dice');
+        
         // Simulate 4 binary dice
         let result = 0;
         const diceResults = [];
@@ -281,7 +284,10 @@ class UrGame {
             const opponent = player === 1 ? 2 : 1;
             this.pieces[opponent][move.captures] = -1;
             this.addMoveToHistory(`Player ${player} captured opponent's piece!`);
-            Utils.playSound('capture');
+            window.SoundManager?.play('capture');
+        } else {
+            // Normal move sound
+            window.SoundManager?.play('move');
         }
         
         // Move piece
@@ -300,7 +306,7 @@ class UrGame {
         
         if (extraTurn) {
             this.addMoveToHistory(`Player ${player} landed on rosette - extra turn!`);
-            Utils.playSound('rosette');
+            window.SoundManager?.play('rosette');
         }
         
         this.endTurn(extraTurn);
@@ -814,6 +820,9 @@ class UrGame {
     // Handle game end
     onGameEnd(winner) {
         const isPlayerWin = this.options.mode !== 'ai' || winner === this.options.playerSide;
+        
+        // Play win/lose sound
+        window.SoundManager?.play(isPlayerWin ? 'win' : 'lose');
         
         // Show result modal
         const modal = Utils.$('#game-end-modal');

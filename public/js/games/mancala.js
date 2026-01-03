@@ -131,9 +131,11 @@ class MancalaGame {
         const playerStore = player === 1 ? 6 : 13;
         const opponentStore = player === 1 ? 13 : 6;
         
-        // Pick up seeds
+        // Pick up seeds - play move sound
         let seeds = this.pits[pitIndex];
         if (seeds === 0) return false;
+        
+        window.SoundManager?.play('move');
         
         this.pits[pitIndex] = 0;
         this.animating = true;
@@ -169,6 +171,9 @@ class MancalaGame {
                     this.pits[oppositePit] = 0;
                     this.pits[currentPit] = 0;
                     this.pits[playerStore] += captured;
+                    
+                    // Sound: capture!
+                    window.SoundManager?.play('capture');
                     
                     this.render();
                     await Utils.wait(200);
@@ -472,6 +477,10 @@ class MancalaGame {
     }
     
     onGameEnd(winner) {
+        // Play win/lose sound
+        const isWin = winner === this.options.playerSide;
+        window.SoundManager?.play(winner === 0 ? 'move' : (isWin ? 'win' : 'lose'));
+        
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
         

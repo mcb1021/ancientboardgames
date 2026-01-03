@@ -195,6 +195,9 @@ class MorrisGame {
             this.piecesOnBoard[opponent]--;
             this.mustRemove = false;
             
+            // Sound: capture piece
+            window.SoundManager?.play('capture');
+            
             // Check for win
             if (this.checkWin()) return;
             
@@ -204,6 +207,9 @@ class MorrisGame {
             this.board[move.pos] = player;
             this.piecesToPlace[player]--;
             this.piecesOnBoard[player]++;
+            
+            // Sound: place piece
+            window.SoundManager?.play('move');
             
             // Check if formed mill
             formedMill = this.checkMill(move.pos, player);
@@ -217,11 +223,17 @@ class MorrisGame {
             this.board[move.to] = player;
             this.selectedPiece = null;
             
+            // Sound: move piece
+            window.SoundManager?.play('move');
+            
             // Check if formed mill
             formedMill = this.checkMill(move.to, player);
         }
         
         if (formedMill) {
+            // Sound: mill formed!
+            window.SoundManager?.play('mill');
+            
             this.mustRemove = true;
             this.calculateValidMoves();
             
@@ -548,9 +560,12 @@ class MorrisGame {
     }
     
     onGameEnd(winner) {
+        // Play win/lose sound
+        const isWin = winner === this.options.playerSide;
+        window.SoundManager?.play(isWin ? 'win' : 'lose');
+        
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
-        const isWin = winner === this.options.playerSide;
         if (content) {
             content.innerHTML = `
                 <h2 style="color: ${isWin ? '#D4AF37' : '#8B2500'}">${isWin ? '🏆 Victory!' : 'Defeat'}</h2>

@@ -122,6 +122,9 @@ class HnefataflGame {
         this.board[fromR][fromC] = 0;
         this.board[toR][toC] = piece;
         
+        // Sound: move piece
+        window.SoundManager?.play('move');
+        
         // Update king position
         if (piece === 3) {
             this.kingPos = { r: toR, c: toC };
@@ -162,6 +165,7 @@ class HnefataflGame {
         const directions = [[0,1],[0,-1],[1,0],[-1,0]];
         const isAttacker = piece === 1;
         const enemyTypes = isAttacker ? [2] : [1]; // King captured differently
+        let anyCaptured = false;
         
         for (const [dr, dc] of directions) {
             const adjR = r + dr;
@@ -192,7 +196,13 @@ class HnefataflGame {
             
             if (captured) {
                 this.board[adjR][adjC] = 0;
+                anyCaptured = true;
             }
+        }
+        
+        // Play capture sound if any captures
+        if (anyCaptured) {
+            window.SoundManager?.play('capture');
         }
     }
     
@@ -421,10 +431,12 @@ class HnefataflGame {
     }
     
     onGameEnd(winner) {
-        Utils.showModal('game-end-modal');
-        const content = Utils.$('#game-end-content');
         const isWin = (winner === 1 && this.options.playerSide === 1) || 
                       (winner === 2 && this.options.playerSide === 2);
+        window.SoundManager?.play(isWin ? 'win' : 'lose');
+        
+        Utils.showModal('game-end-modal');
+        const content = Utils.$('#game-end-content');
         if (content) {
             content.innerHTML = `
                 <h2 style="color: ${isWin ? '#D4AF37' : '#8B2500'}">${isWin ? '🏆 Victory!' : 'Defeat'}</h2>

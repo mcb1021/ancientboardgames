@@ -149,8 +149,11 @@ class SenetGame {
         const opponent = player === 1 ? 2 : 1;
         
         if (move.swap !== undefined) {
-            // Swap positions
+            // Swap positions - like a capture
             this.pieces[opponent][move.swap] = move.from;
+            window.SoundManager?.play('capture');
+        } else {
+            window.SoundManager?.play('move');
         }
         
         if (move.to === 29 || move.to > 29) {
@@ -275,10 +278,12 @@ class SenetGame {
     }
     
     onGameEnd(winner) {
+        const isWin = winner === this.options.playerSide;
+        window.SoundManager?.play(isWin ? 'win' : 'lose');
+        
         Utils.showModal('game-end-modal');
         const content = Utils.$('#game-end-content');
         if (content) {
-            const isWin = winner === this.options.playerSide;
             content.innerHTML = `
                 <h2 style="color: ${isWin ? '#D4AF37' : '#8B2500'}">${isWin ? '🏆 Victory!' : 'Defeat'}</h2>
                 <p>Your soul has ${isWin ? 'passed' : 'failed'} through the afterlife!</p>
