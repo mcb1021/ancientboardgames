@@ -2299,3 +2299,119 @@ body.desktop-view .game-sidebar { display: flex; }
 .sound-toggle .hidden {
     display: none;
 }
+
+/* Game Timer */
+.game-timer-container {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.game-timer-container.hidden {
+    display: none;
+}
+
+.timer-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+.timer-icon {
+    font-size: 1.2rem;
+}
+
+.timer-value {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--gold);
+    font-weight: bold;
+}
+
+.timer-value.warning {
+    color: #FF6B35;
+    animation: pulse 0.5s ease-in-out infinite;
+}
+
+.timer-value.critical {
+    color: #FF0000;
+    animation: pulse 0.3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.timer-bar {
+    height: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), #D4AF37);
+    transition: width 1s linear;
+    width: 100%;
+}
+
+.timer-fill.warning {
+    background: linear-gradient(90deg, #FF6B35, #FF8C00);
+}
+
+.timer-fill.critical {
+    background: linear-gradient(90deg, #FF0000, #FF4444);
+}
+
+/* Social Share Buttons */
+.share-buttons {
+    display: flex;
+    gap: var(--space-sm);
+    justify-content: center;
+    margin-top: var(--space-md);
+}
+
+.share-btn {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.share-btn:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+.share-btn.twitter {
+    background: #1DA1F2;
+    color: white;
+}
+
+.share-btn.facebook {
+    background: #4267B2;
+    color: white;
+}
+
+.share-btn.copy {
+    background: var(--gold);
+    color: var(--bg-dark);
+}
+
+/* Room time limit display */
+.room-time-limit {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-left: var(--space-sm);
+}
