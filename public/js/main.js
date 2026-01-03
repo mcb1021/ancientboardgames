@@ -681,14 +681,28 @@ function initSocket() {
             if (currentGame && currentGame.receiveMove) {
                 // Use receiveMove for proper remote move handling
                 currentGame.receiveMove(data.move);
+                // Reset timer after opponent's move
+                resetTurnTimer();
             } else if (currentGame) {
                 // Fallback
                 currentGame.makeMove(data.move, true);
+                resetTurnTimer();
+            }
+        });
+        
+        socket.on('turn-skipped', (data) => {
+            Utils.toast(`${data.playerName}'s turn was skipped (timeout)`, 'warning');
+            if (currentGame) {
+                // Force turn switch
+                currentGame.currentPlayer = currentGame.currentPlayer === 1 ? 2 : 1;
+                currentGame.render?.();
+                resetTurnTimer();
             }
         });
         
         socket.on('opponent-left', () => {
             Utils.toast('Opponent left the game', 'warning');
+            stopTurnTimer();
             if (currentGame) {
                 currentGame.gameOver = true;
             }
@@ -823,6 +837,9 @@ function startMultiplayerGame(data) {
     
     window.currentGame = currentGame;
     
+    // Default avatar SVG (simple silhouette)
+    const defaultAvatarSVG = `<svg viewBox="0 0 100 100" width="40" height="40"><circle cx="50" cy="50" r="48" fill="#2A241C" stroke="#D4AF37" stroke-width="2"/><circle cx="50" cy="38" r="18" fill="#D4AF37"/><ellipse cx="50" cy="82" rx="30" ry="22" fill="#D4AF37"/></svg>`;
+    
     // Update player panels with names and avatars
     const player1Name = Utils.$('.player-1 .player-name');
     const player2Name = Utils.$('.player-2 .player-name');
@@ -833,12 +850,20 @@ function startMultiplayerGame(data) {
         if (player1Name) player1Name.textContent = me?.name || 'You';
         if (player2Name) player2Name.textContent = opponent?.name || 'Opponent';
         
-        // Set avatars
-        if (player1Avatar && me?.avatar && window.ShopAssets) {
-            player1Avatar.innerHTML = window.ShopAssets.getSVG(me.avatar) || '';
+        // Set avatars - use custom if available, otherwise default
+        if (player1Avatar) {
+            if (me?.avatar && window.ShopAssets) {
+                player1Avatar.innerHTML = window.ShopAssets.getSVG(me.avatar) || defaultAvatarSVG;
+            } else {
+                player1Avatar.innerHTML = defaultAvatarSVG;
+            }
         }
-        if (player2Avatar && opponent?.avatar && window.ShopAssets) {
-            player2Avatar.innerHTML = window.ShopAssets.getSVG(opponent.avatar) || '';
+        if (player2Avatar) {
+            if (opponent?.avatar && window.ShopAssets) {
+                player2Avatar.innerHTML = window.ShopAssets.getSVG(opponent.avatar) || defaultAvatarSVG;
+            } else {
+                player2Avatar.innerHTML = defaultAvatarSVG;
+            }
         }
     }
     
@@ -1287,16 +1312,20 @@ function updateTimerDisplay() {
 function handleTimerExpired() {
     if (!currentGame || currentGame.gameOver) return;
     
-    // In multiplayer, timeout means forfeit
+    // In multiplayer, timeout means turn skip (not forfeit)
     if (currentGame.options?.mode === 'online') {
         if (currentGame.currentPlayer === currentGame.options.playerSide) {
-            // You ran out of time
-            Utils.toast('Time\'s up! You forfeit the game.', 'error');
-            socket?.emit('game-end', {
+            // You ran out of time - skip your turn
+            Utils.toast('Time\'s up! Your turn was skipped.', 'warning');
+            socket?.emit('turn-timeout', {
                 roomId: currentGame.options.roomId,
-                winner: currentGame.currentPlayer === 1 ? 2 : 1,
-                reason: 'timeout'
+                player: currentGame.currentPlayer
             });
+            
+            // Switch turn locally
+            currentGame.currentPlayer = currentGame.currentPlayer === 1 ? 2 : 1;
+            currentGame.render?.();
+            resetTurnTimer();
         }
     } else {
         // AI game - skip turn
@@ -1305,6 +1334,7 @@ function handleTimerExpired() {
             currentGame.endTurn(false);
             currentGame.render?.();
         }
+        resetTurnTimer();
     }
 }
 
