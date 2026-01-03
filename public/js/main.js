@@ -941,6 +941,7 @@ async function loadProfile() {
         Utils.$('#profile-coins').textContent = '0';
         Utils.$('#profile-games').textContent = '0';
         Utils.$('#profile-wins').textContent = '0';
+        Utils.$('#cancel-sub-btn')?.classList.add('hidden');
         return;
     }
     
@@ -957,12 +958,21 @@ async function loadProfile() {
     Utils.$('#profile-games').textContent = profile?.stats?.gamesPlayed || 0;
     Utils.$('#profile-wins').textContent = profile?.stats?.gamesWon || 0;
     
-    // Membership status
+    // Membership status and cancel button
     const membershipEl = Utils.$('#profile-membership');
+    const cancelBtn = Utils.$('#cancel-sub-btn');
+    
     if (Auth.isPremium()) {
-        membershipEl.innerHTML = '<span class="membership-badge premium">★ Premium Member</span>';
+        if (profile?.cancelAtPeriodEnd) {
+            membershipEl.innerHTML = '<span class="membership-badge premium">★ Premium (Canceling)</span>';
+            cancelBtn?.classList.add('hidden');
+        } else {
+            membershipEl.innerHTML = '<span class="membership-badge premium">★ Premium Member</span>';
+            cancelBtn?.classList.remove('hidden');
+        }
     } else {
         membershipEl.innerHTML = '<span class="membership-badge free">Free Account</span>';
+        cancelBtn?.classList.add('hidden');
     }
     
     // Equipped avatar
@@ -1101,6 +1111,43 @@ function showBuyCoins() {
     }, 100);
 }
 
+// Cancel subscription
+async function cancelSubscription() {
+    if (!Auth.isSignedIn()) return;
+    
+    // Confirm with user
+    const confirmed = confirm(
+        'Are you sure you want to cancel your subscription?\n\n' +
+        'You will keep Premium access until the end of your current billing period.'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        Utils.toast('Canceling subscription...', 'info');
+        
+        const response = await fetch('/api/cancel-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: Auth.user.uid })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            Utils.toast('Subscription canceled. You\'ll have access until the end of your billing period.', 'success');
+            // Refresh profile to update UI
+            await Auth.refreshProfile();
+            loadProfile();
+        } else {
+            throw new Error(data.error || 'Failed to cancel subscription');
+        }
+    } catch (error) {
+        console.error('Cancel subscription error:', error);
+        Utils.toast('Failed to cancel subscription. Please try again.', 'error');
+    }
+}
+
 // Global functions for HTML onclick handlers
 window.navigateTo = navigateTo;
 window.startQuickGame = startQuickGame;
@@ -1112,6 +1159,7 @@ window.showGameRules = showGameRules;
 window.subscribe = subscribe;
 window.buyCoins = buyCoins;
 window.showBuyCoins = showBuyCoins;
+window.cancelSubscription = cancelSubscription;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
