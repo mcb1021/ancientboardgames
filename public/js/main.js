@@ -1033,6 +1033,7 @@ async function loadProfile() {
         Utils.$('#profile-coins').textContent = '0';
         Utils.$('#profile-games').textContent = '0';
         Utils.$('#profile-wins').textContent = '0';
+        Utils.$('#profile-losses').textContent = '0';
         Utils.$('#cancel-sub-btn')?.classList.add('hidden');
         
         // Show sign in, hide sign out
@@ -1057,6 +1058,7 @@ async function loadProfile() {
     Utils.$('#profile-coins').textContent = Utils.formatNumber(profile?.coins || 0);
     Utils.$('#profile-games').textContent = profile?.stats?.gamesPlayed || 0;
     Utils.$('#profile-wins').textContent = profile?.stats?.gamesWon || 0;
+    Utils.$('#profile-losses').textContent = profile?.stats?.gamesLost || 0;
     
     // Membership status and cancel button
     const membershipEl = Utils.$('#profile-membership');
