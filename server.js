@@ -339,7 +339,8 @@ io.on('connection', (socket) => {
                     id,
                     name: room.name,
                     game: room.game,
-                    host: room.hostName
+                    host: room.hostName,
+                    timeLimit: room.timeLimit || 60
                 });
             }
         });
@@ -355,13 +356,16 @@ io.on('connection', (socket) => {
             name: data.name,
             game: data.game,
             isPrivate: data.isPrivate,
+            timeLimit: data.timeLimit || 60,
             hostId: data.hostId,
             hostName: data.hostName,
             players: [{
                 id: data.hostId,
                 name: data.hostName,
                 socketId: socket.id,
-                side: 1
+                side: 1,
+                avatar: data.hostAvatar || null,
+                pieces: data.hostPieces || null
             }],
             gameState: null,
             createdAt: Date.now()
@@ -370,7 +374,7 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         socket.emit('room-created', { roomId });
         
-        console.log(`Room created: ${roomId} by ${data.hostName}`);
+        console.log(`Room created: ${roomId} by ${data.hostName} (${data.timeLimit}s timer)`);
     });
     
     // Join a room
@@ -391,7 +395,9 @@ io.on('connection', (socket) => {
             id: data.playerId,
             name: data.playerName,
             socketId: socket.id,
-            side: 2
+            side: 2,
+            avatar: data.playerAvatar || null,
+            pieces: data.playerPieces || null
         });
         
         socket.join(data.roomId);
@@ -406,26 +412,19 @@ io.on('connection', (socket) => {
         if (room.players.length === 2) {
             gamesToday++;
             
-            io.to(data.roomId).emit('game-start', {
-                roomId: data.roomId,
-                game: room.game,
-                players: room.players.map(p => ({
-                    id: p.id,
-                    name: p.name,
-                    side: p.side
-                }))
-            });
-            
-            // Send individual player sides
+            // Send individual player sides with all cosmetic info
             room.players.forEach(player => {
                 io.to(player.socketId).emit('game-start', {
                     roomId: data.roomId,
                     game: room.game,
+                    timeLimit: room.timeLimit,
                     playerSide: player.side,
                     players: room.players.map(p => ({
                         id: p.id,
                         name: p.name,
-                        side: p.side
+                        side: p.side,
+                        avatar: p.avatar,
+                        pieces: p.pieces
                     }))
                 });
             });
