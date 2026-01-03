@@ -6,6 +6,10 @@
 let currentGame = null;
 let currentPage = 'home';
 let socket = null;
+let currentGameKey = null;
+let turnTimer = null;
+let turnTimeLimit = 60;
+let turnTimeRemaining = 60;
 
 // Game class mapping - with fallback checks
 const GameClasses = {};
@@ -724,10 +728,13 @@ function loadRooms() {
             
             roomsList.innerHTML = '';
             rooms.forEach(room => {
+                const timeText = room.timeLimit === 0 ? 'No limit' : `${room.timeLimit}s`;
                 const li = Utils.createElement('li', {}, [
                     Utils.createElement('div', { class: 'room-info' }, [
                         Utils.createElement('span', { class: 'room-name' }, [room.name]),
-                        Utils.createElement('span', { class: 'room-game' }, [CONFIG.games[room.game]?.name || room.game])
+                        Utils.createElement('span', { class: 'room-game' }, [
+                            (CONFIG.games[room.game]?.name || room.game) + ` • ⏱️ ${timeText}`
+                        ])
                     ]),
                     Utils.createElement('button', { 
                         class: 'btn-primary btn-small',
@@ -749,14 +756,18 @@ function createRoom() {
     const game = Utils.$('#lobby-game-select').value;
     const name = Utils.$('#room-name-input').value || `${Auth.user.displayName}'s Room`;
     const isPrivate = Utils.$('.toggle-btn.active')?.dataset.mode === 'private';
+    const timeLimit = parseInt(Utils.$('#time-limit-select')?.value || '60');
     
     if (socket && socket.connected) {
         socket.emit('create-room', {
             game,
             name,
             isPrivate,
+            timeLimit,
             hostId: Auth.user.uid,
-            hostName: Auth.user.displayName
+            hostName: Auth.user.displayName,
+            hostAvatar: Auth.getEquipped?.('avatar') || null,
+            hostPieces: Auth.getEquipped?.('piece') || null
         });
     } else {
         Utils.toast('Not connected to server', 'error');
@@ -773,7 +784,9 @@ function joinRoom(roomId) {
         socket.emit('join-room', {
             roomId,
             playerId: Auth.user.uid,
-            playerName: Auth.user.displayName
+            playerName: Auth.user.displayName,
+            playerAvatar: Auth.getEquipped?.('avatar') || null,
+            playerPieces: Auth.getEquipped?.('piece') || null
         });
     }
 }
@@ -788,28 +801,53 @@ function startMultiplayerGame(data) {
         currentGame.destroy();
     }
     
+    // Stop any existing timer
+    stopTurnTimer();
+    
     const gameConfig = CONFIG.games[data.game];
     canvas.width = gameConfig.boardSize.width;
     canvas.height = gameConfig.boardSize.height;
+    currentGameKey = data.game;
+    
+    // Get opponent's cosmetics for display
+    const me = data.players?.find(p => p.side === data.playerSide);
+    const opponent = data.players?.find(p => p.side !== data.playerSide);
     
     currentGame = new GameClass(canvas, {
         mode: 'online',
         playerSide: data.playerSide,
-        roomId: data.roomId
+        roomId: data.roomId,
+        opponentPieces: opponent?.pieces || null,
+        opponentAvatar: opponent?.avatar || null
     });
     
     window.currentGame = currentGame;
     
-    // Update player names for multiplayer
-    const player1Panel = Utils.$('.player-1 .player-name');
-    const player2Panel = Utils.$('.player-2 .player-name');
+    // Update player panels with names and avatars
+    const player1Name = Utils.$('.player-1 .player-name');
+    const player2Name = Utils.$('.player-2 .player-name');
+    const player1Avatar = Utils.$('.player-1 .player-avatar');
+    const player2Avatar = Utils.$('.player-2 .player-avatar');
     
     if (data.players && data.players.length === 2) {
-        const me = data.players.find(p => p.side === data.playerSide);
-        const opponent = data.players.find(p => p.side !== data.playerSide);
+        if (player1Name) player1Name.textContent = me?.name || 'You';
+        if (player2Name) player2Name.textContent = opponent?.name || 'Opponent';
         
-        if (player1Panel) player1Panel.textContent = me?.name || 'You';
-        if (player2Panel) player2Panel.textContent = opponent?.name || 'Opponent';
+        // Set avatars
+        if (player1Avatar && me?.avatar && window.ShopAssets) {
+            player1Avatar.innerHTML = window.ShopAssets.getSVG(me.avatar) || '';
+        }
+        if (player2Avatar && opponent?.avatar && window.ShopAssets) {
+            player2Avatar.innerHTML = window.ShopAssets.getSVG(opponent.avatar) || '';
+        }
+    }
+    
+    // Setup timer if time limit is set
+    turnTimeLimit = data.timeLimit || 60;
+    if (turnTimeLimit > 0) {
+        const timerContainer = Utils.$('#game-timer-container');
+        if (timerContainer) timerContainer.classList.remove('hidden');
+        startTurnTimer();
     }
     
     // Update game status
@@ -1174,6 +1212,225 @@ async function cancelSubscription() {
     }
 }
 
+// ============================================
+// TURN TIMER
+// ============================================
+
+function startTurnTimer() {
+    stopTurnTimer();
+    turnTimeRemaining = turnTimeLimit;
+    updateTimerDisplay();
+    
+    turnTimer = setInterval(() => {
+        turnTimeRemaining--;
+        updateTimerDisplay();
+        
+        if (turnTimeRemaining <= 0) {
+            stopTurnTimer();
+            handleTimerExpired();
+        }
+    }, 1000);
+}
+
+function stopTurnTimer() {
+    if (turnTimer) {
+        clearInterval(turnTimer);
+        turnTimer = null;
+    }
+}
+
+function resetTurnTimer() {
+    if (turnTimeLimit > 0) {
+        startTurnTimer();
+    }
+}
+
+function updateTimerDisplay() {
+    const timerValue = Utils.$('#turn-timer');
+    const timerFill = Utils.$('#timer-fill');
+    
+    if (timerValue) {
+        timerValue.textContent = turnTimeRemaining;
+        timerValue.classList.remove('warning', 'critical');
+        
+        if (turnTimeRemaining <= 10) {
+            timerValue.classList.add('critical');
+        } else if (turnTimeRemaining <= 20) {
+            timerValue.classList.add('warning');
+        }
+    }
+    
+    if (timerFill) {
+        const percent = (turnTimeRemaining / turnTimeLimit) * 100;
+        timerFill.style.width = percent + '%';
+        timerFill.classList.remove('warning', 'critical');
+        
+        if (turnTimeRemaining <= 10) {
+            timerFill.classList.add('critical');
+        } else if (turnTimeRemaining <= 20) {
+            timerFill.classList.add('warning');
+        }
+    }
+}
+
+function handleTimerExpired() {
+    if (!currentGame || currentGame.gameOver) return;
+    
+    // In multiplayer, timeout means forfeit
+    if (currentGame.options?.mode === 'online') {
+        if (currentGame.currentPlayer === currentGame.options.playerSide) {
+            // You ran out of time
+            Utils.toast('Time\'s up! You forfeit the game.', 'error');
+            socket?.emit('game-end', {
+                roomId: currentGame.options.roomId,
+                winner: currentGame.currentPlayer === 1 ? 2 : 1,
+                reason: 'timeout'
+            });
+        }
+    } else {
+        // AI game - skip turn
+        Utils.toast('Time\'s up! Turn skipped.', 'warning');
+        if (currentGame.endTurn) {
+            currentGame.endTurn(false);
+            currentGame.render?.();
+        }
+    }
+}
+
+// ============================================
+// GAME CONTROLS
+// ============================================
+
+function showCurrentGameRules() {
+    if (currentGameKey) {
+        showGameRules(currentGameKey);
+    } else {
+        Utils.toast('No game in progress', 'info');
+    }
+}
+
+function resignGame() {
+    if (!currentGame || currentGame.gameOver) {
+        Utils.toast('No game in progress', 'info');
+        return;
+    }
+    
+    const confirmed = confirm('Are you sure you want to resign?');
+    if (!confirmed) return;
+    
+    currentGame.gameOver = true;
+    stopTurnTimer();
+    
+    // Emit resign to server if online
+    if (currentGame.options?.mode === 'online') {
+        socket?.emit('game-end', {
+            roomId: currentGame.options.roomId,
+            winner: currentGame.options.playerSide === 1 ? 2 : 1,
+            reason: 'resign'
+        });
+    }
+    
+    // Update stats
+    if (Auth.isSignedIn()) {
+        Auth.updateStats(false); // Record as loss
+    }
+    
+    // Show result
+    Utils.showModal('game-end-modal');
+    const content = Utils.$('#game-end-content');
+    if (content) {
+        content.innerHTML = `
+            <h2 style="color: #8B2500">You Resigned</h2>
+            <p>Better luck next time!</p>
+            ${getShareButtons(false)}
+            <button class="btn-primary" onclick="Utils.hideModal('game-end-modal'); navigateTo('games');">Back to Games</button>
+        `;
+    }
+    
+    window.SoundManager?.play('lose');
+}
+
+// ============================================
+// SOCIAL SHARING
+// ============================================
+
+function getShareButtons(isWin) {
+    const gameNames = {
+        ur: 'Royal Game of Ur',
+        senet: 'Senet',
+        hnefatafl: 'Hnefatafl',
+        morris: "Nine Men's Morris",
+        mancala: 'Mancala'
+    };
+    const gameName = gameNames[currentGameKey] || 'an ancient board game';
+    const message = isWin 
+        ? `🏆 I just won a game of ${gameName} on Ancient Board Games! Play 5000-year-old games online.`
+        : `I just played ${gameName} on Ancient Board Games! Try these 5000-year-old games.`;
+    const url = 'https://ancientboardgames.io';
+    
+    return `
+        <div class="share-buttons">
+            <button class="share-btn twitter" onclick="shareTwitter('${encodeURIComponent(message)}', '${url}')">
+                𝕏 Share
+            </button>
+            <button class="share-btn facebook" onclick="shareFacebook('${url}')">
+                f Share
+            </button>
+            <button class="share-btn copy" onclick="copyShareLink('${url}')">
+                📋 Copy Link
+            </button>
+        </div>
+    `;
+}
+
+function shareTwitter(message, url) {
+    window.open(`https://twitter.com/intent/tweet?text=${message}&url=${encodeURIComponent(url)}`, '_blank');
+}
+
+function shareFacebook(url) {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+}
+
+function copyShareLink(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        Utils.toast('Link copied!', 'success');
+    });
+}
+
+// ============================================
+// GAME STATISTICS TRACKING
+// ============================================
+
+function trackGameStart(gameKey) {
+    if (!Auth.isSignedIn()) return;
+    
+    // Track game start in Firebase
+    const db = firebase.database();
+    db.ref(`users/${Auth.user.uid}/stats/gamesPlayed`).transaction(current => {
+        return (current || 0) + 1;
+    });
+}
+
+function trackGameEnd(isWin, gameKey) {
+    if (!Auth.isSignedIn()) return;
+    
+    const db = firebase.database();
+    const userRef = db.ref(`users/${Auth.user.uid}`);
+    
+    if (isWin) {
+        userRef.child('stats/gamesWon').transaction(current => (current || 0) + 1);
+    } else {
+        userRef.child('stats/gamesLost').transaction(current => (current || 0) + 1);
+    }
+    
+    // Update rating (simple ELO-like system)
+    const ratingChange = isWin ? 15 : -10;
+    userRef.child(`ratings/${gameKey}`).transaction(current => {
+        const newRating = (current || 1200) + ratingChange;
+        return Math.max(100, newRating); // Minimum rating of 100
+    });
+}
+
 // Toggle sound on/off
 function toggleSound() {
     const btn = Utils.$('#sound-toggle');
@@ -1210,11 +1467,16 @@ window.startGameWithDifficulty = startGameWithDifficulty;
 window.showGameInfo = showGameInfo;
 window.showInfoTab = showInfoTab;
 window.showGameRules = showGameRules;
+window.showCurrentGameRules = showCurrentGameRules;
+window.resignGame = resignGame;
 window.subscribe = subscribe;
 window.buyCoins = buyCoins;
 window.showBuyCoins = showBuyCoins;
 window.cancelSubscription = cancelSubscription;
 window.toggleSound = toggleSound;
+window.shareTwitter = shareTwitter;
+window.shareFacebook = shareFacebook;
+window.copyShareLink = copyShareLink;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
