@@ -1,0 +1,1939 @@
+// ============================================
+// ANCIENT BOARD GAMES - MAIN APPLICATION
+// ============================================
+
+// Global state
+let currentGame = null;
+let currentPage = 'home';
+let socket = null;
+let currentGameKey = null;
+let turnTimer = null;
+let turnTimeLimit = 60;
+let turnTimeRemaining = 60;
+let currentRoomId = null; // Track current multiplayer room
+
+// Game class mapping - with fallback checks
+const GameClasses = {};
+
+// Safely add game classes if they exist
+if (typeof UrGame !== 'undefined') GameClasses.ur = UrGame;
+if (typeof SenetGame !== 'undefined') GameClasses.senet = SenetGame;
+if (typeof HnefataflGame !== 'undefined') GameClasses.hnefatafl = HnefataflGame;
+if (typeof MorrisGame !== 'undefined') GameClasses.morris = MorrisGame;
+if (typeof MancalaGame !== 'undefined') GameClasses.mancala = MancalaGame;
+
+// ============================================
+// GAME CLEANUP & SESSION MANAGEMENT
+// ============================================
+
+function cleanupCurrentGame() {
+    // Stop timer
+    stopTurnTimer();
+    
+    // Destroy current game instance
+    if (currentGame) {
+        try {
+            currentGame.destroy();
+        } catch (e) {
+            console.warn('Error destroying game:', e);
+        }
+        currentGame = null;
+        window.currentGame = null;
+    }
+    
+    // Clear game key
+    currentGameKey = null;
+    
+    // Leave multiplayer room if in one
+    if (currentRoomId && socket && socket.connected) {
+        socket.emit('leave-room', { roomId: currentRoomId });
+        currentRoomId = null;
+    }
+    
+    // Clear session storage for game state
+    sessionStorage.removeItem('activeGame');
+    
+    // Reset timer display
+    turnTimeRemaining = 60;
+    const timerContainer = Utils.$('#game-timer-container');
+    if (timerContainer) timerContainer.classList.add('hidden');
+    
+    // Clear canvas
+    const canvas = Utils.$('#game-canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+}
+
+function saveGameSession(gameKey, mode, roomId = null, options = {}) {
+    const sessionData = {
+        gameKey,
+        mode,
+        roomId,
+        options,
+        timestamp: Date.now()
+    };
+    sessionStorage.setItem('activeGame', JSON.stringify(sessionData));
+}
+
+function getGameSession() {
+    try {
+        const data = sessionStorage.getItem('activeGame');
+        if (!data) return null;
+        const session = JSON.parse(data);
+        // Session expires after 30 minutes
+        if (Date.now() - session.timestamp > 30 * 60 * 1000) {
+            sessionStorage.removeItem('activeGame');
+            return null;
+        }
+        return session;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Handle page visibility change (tab switch)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        // Tab became visible - check if we should reconnect
+        const session = getGameSession();
+        if (session && session.mode === 'online' && session.roomId) {
+            // Try to rejoin the room
+            if (socket && socket.connected) {
+                socket.emit('rejoin-room', {
+                    roomId: session.roomId,
+                    playerId: Auth.user?.uid
+                });
+            }
+        }
+    }
+});
+
+// Initialize application
+document.addEventListener('DOMContentLoaded', () => {
+    initNavigation();
+    initModals();
+    initViewToggle();
+    initShop();
+    initSocket();
+    updateStats();
+    
+    // Check for URL parameters
+    const gameParam = Utils.getQueryParam('game');
+    const roomParam = Utils.getQueryParam('room');
+    
+    if (gameParam && GameClasses[gameParam]) {
+        startQuickGame(gameParam);
+    } else if (roomParam) {
+        joinRoom(roomParam);
+    }
+});
+
+// Navigation
+function initNavigation() {
+    const navBtns = Utils.$$('.nav-btn');
+    navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = btn.dataset.page;
+            navigateTo(page);
+        });
+    });
+}
+
+function navigateTo(page) {
+    // If leaving play page with an active game, save state for potential reconnect
+    if (currentPage === 'play' && page !== 'play' && currentGame && !currentGame.gameOver) {
+        // Save current game state to session
+        const session = getGameSession();
+        if (session && currentGame.getState) {
+            session.gameState = currentGame.getState();
+            session.timestamp = Date.now();
+            sessionStorage.setItem('activeGame', JSON.stringify(session));
+        }
+    }
+    
+    // Hide all pages
+    Utils.$$('.page').forEach(p => p.classList.remove('active'));
+    
+    // Show target page
+    const targetPage = Utils.$(`#page-${page}`);
+    if (targetPage) {
+        targetPage.classList.add('active');
+    }
+    
+    // Update nav buttons
+    Utils.$$('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.page === page);
+    });
+    
+    currentPage = page;
+    
+    // Page-specific initialization
+    if (page === 'games') {
+        renderGamesSelection();
+        // Check for active game session and show reconnect option
+        checkForActiveGame();
+    } else if (page === 'rankings') {
+        loadRankings();
+    } else if (page === 'lobby') {
+        loadRooms();
+    } else if (page === 'profile') {
+        loadProfile();
+    } else if (page === 'home') {
+        checkForActiveGame();
+    }
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+}
+
+// Check if there's an active game to reconnect to
+function checkForActiveGame() {
+    const session = getGameSession();
+    if (!session) return;
+    
+    // Don't show if already on play page or game is too old (30 min)
+    if (currentPage === 'play') return;
+    if (Date.now() - session.timestamp > 30 * 60 * 1000) {
+        sessionStorage.removeItem('activeGame');
+        return;
+    }
+    
+    const gameName = CONFIG.games[session.gameKey]?.name || session.gameKey;
+    const modeText = session.mode === 'online' ? 'Online' : `AI (${session.options?.aiDifficulty || 'medium'})`;
+    
+    // Show reconnect toast with action
+    showReconnectPrompt(gameName, modeText, session);
+}
+
+function showReconnectPrompt(gameName, modeText, session) {
+    // Create custom toast with buttons
+    const container = Utils.$('#toast-container');
+    if (!container) return;
+    
+    const toast = Utils.createElement('div', { class: 'toast reconnect-toast' }, []);
+    toast.innerHTML = `
+        <div class="reconnect-content">
+            <span class="reconnect-icon">🎮</span>
+            <div class="reconnect-text">
+                <strong>Game in progress</strong>
+                <span>${gameName} (${modeText})</span>
+            </div>
+        </div>
+        <div class="reconnect-actions">
+            <button class="btn-reconnect" onclick="reconnectToGame()">Continue</button>
+            <button class="btn-abandon" onclick="abandonGame()">New Game</button>
+        </div>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-dismiss after 10 seconds
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 10000);
+}
+
+function reconnectToGame() {
+    const session = getGameSession();
+    if (!session) return;
+    
+    // Remove reconnect toast
+    Utils.$('.reconnect-toast')?.remove();
+    
+    if (session.mode === 'online' && session.roomId) {
+        // Online game - try server rejoin
+        if (socket && socket.connected) {
+            socket.emit('rejoin-room', {
+                roomId: session.roomId,
+                playerId: Auth.user?.uid
+            });
+        }
+    } else {
+        // AI game - restore locally
+        const GameClass = GameClasses[session.gameKey];
+        if (!GameClass) return;
+        
+        navigateTo('play');
+        
+        const canvas = Utils.$('#game-canvas');
+        const gameConfig = CONFIG.games[session.gameKey];
+        canvas.width = gameConfig.boardSize.width;
+        canvas.height = gameConfig.boardSize.height;
+        currentGameKey = session.gameKey;
+        
+        currentGame = new GameClass(canvas, {
+            mode: 'ai',
+            aiDifficulty: session.options?.aiDifficulty || 'medium',
+            playerSide: 1
+        });
+        
+        // Restore game state if available
+        if (session.gameState && currentGame) {
+            try {
+                Object.assign(currentGame, session.gameState);
+                currentGame.render?.();
+                Utils.toast('Game restored!', 'success');
+            } catch (e) {
+                console.warn('Could not restore game state:', e);
+            }
+        }
+        
+        window.currentGame = currentGame;
+        
+        // Show/hide dice button based on game
+        const gamesWithDice = ['ur', 'senet'];
+        const diceBtn = Utils.$('#roll-dice-btn');
+        if (diceBtn) {
+            if (gamesWithDice.includes(session.gameKey)) {
+                diceBtn.classList.remove('hidden');
+            } else {
+                diceBtn.classList.add('hidden');
+            }
+        }
+        
+        const difficulty = session.options?.aiDifficulty || 'medium';
+        Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
+        updateTurnIndicator();
+        updatePlayerNames(session.gameKey);
+    }
+}
+
+function abandonGame() {
+    // Remove reconnect toast
+    Utils.$('.reconnect-toast')?.remove();
+    
+    // Clear session
+    sessionStorage.removeItem('activeGame');
+    currentRoomId = null;
+    
+    Utils.toast('Previous game abandoned', 'info');
+}
+
+// Games selection page
+function renderGamesSelection() {
+    const container = Utils.$('.games-selection');
+    if (!container) return;
+    
+    // Safety check for CONFIG
+    if (typeof CONFIG === 'undefined' || !CONFIG.games) {
+        container.innerHTML = '<p style="color: #D4AF37; text-align: center;">Loading games...</p>';
+        console.error('CONFIG.games not available');
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    Object.entries(CONFIG.games).forEach(([key, game]) => {
+        const card = Utils.createElement('div', { class: 'game-select-card', dataset: { game: key } }, [
+            Utils.createElement('div', { class: 'game-select-header' }, [
+                Utils.createElement('h3', {}, [game.name]),
+                Utils.createElement('span', { class: 'game-era' }, [game.era])
+            ]),
+            Utils.createElement('p', {}, [game.description]),
+            Utils.createElement('div', { class: 'game-select-actions' }, [
+                Utils.createElement('button', { 
+                    class: 'btn-primary',
+                    onClick: () => showDifficultyModal(key)
+                }, ['Play vs AI']),
+                Utils.createElement('button', { 
+                    class: 'btn-secondary',
+                    onClick: () => {
+                        Utils.$('#lobby-game-select').value = key;
+                        navigateTo('lobby');
+                    }
+                }, ['Find Match']),
+                Utils.createElement('button', { 
+                    class: 'btn-secondary',
+                    onClick: () => showGameInfo(key)
+                }, ['Rules & History'])
+            ])
+        ]);
+        container.appendChild(card);
+    });
+}
+
+// Start a quick game against AI
+// Store pending game info for difficulty selection
+let pendingGameKey = null;
+
+// Show difficulty selection modal
+function showDifficultyModal(gameKey) {
+    pendingGameKey = gameKey;
+    const gameConfig = CONFIG.games[gameKey];
+    
+    const content = Utils.$('#difficulty-modal-content');
+    if (content) {
+        content.innerHTML = `
+            <h2>Select Difficulty</h2>
+            <p>Playing: ${gameConfig.name}</p>
+            <div class="difficulty-options">
+                <button class="btn-difficulty easy" onclick="startGameWithDifficulty('easy')">
+                    <span class="diff-icon">🌱</span>
+                    <span class="diff-name">Easy</span>
+                    <span class="diff-desc">Relaxed gameplay, learning mode</span>
+                </button>
+                <button class="btn-difficulty medium" onclick="startGameWithDifficulty('medium')">
+                    <span class="diff-icon">⚔️</span>
+                    <span class="diff-name">Medium</span>
+                    <span class="diff-desc">Balanced challenge</span>
+                </button>
+                <button class="btn-difficulty hard" onclick="startGameWithDifficulty('hard')">
+                    <span class="diff-icon">🔥</span>
+                    <span class="diff-name">Hard</span>
+                    <span class="diff-desc">Expert AI opponent</span>
+                </button>
+            </div>
+        `;
+    }
+    Utils.showModal('difficulty-modal');
+}
+
+// Start game with selected difficulty
+function startGameWithDifficulty(difficulty) {
+    Utils.hideModal('difficulty-modal');
+    if (!pendingGameKey) return;
+    startQuickGame(pendingGameKey, difficulty);
+}
+
+function startQuickGame(gameKey, difficulty = 'medium') {
+    const GameClass = GameClasses[gameKey];
+    if (!GameClass) {
+        Utils.toast('Game not found', 'error');
+        return;
+    }
+    
+    // Clean up any existing game first
+    cleanupCurrentGame();
+    
+    // Navigate to play page
+    navigateTo('play');
+    
+    // Get canvas
+    const canvas = Utils.$('#game-canvas');
+    if (!canvas) return;
+    
+    // Set canvas size based on game
+    const gameConfig = CONFIG.games[gameKey];
+    canvas.width = gameConfig.boardSize.width;
+    canvas.height = gameConfig.boardSize.height;
+    
+    // Store current game key
+    currentGameKey = gameKey;
+    
+    // Create new game
+    currentGame = new GameClass(canvas, {
+        mode: 'ai',
+        aiDifficulty: difficulty,
+        playerSide: 1
+    });
+    
+    window.currentGame = currentGame;
+    
+    // Save session for reconnection (AI games too)
+    saveGameSession(gameKey, 'ai', null, { aiDifficulty: difficulty });
+    
+    // Update UI
+    Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
+    updateTurnIndicator();
+    updatePlayerNames(gameKey);
+    
+    // Games that use dice: ur, senet
+    // Games that don't use dice: morris, hnefatafl, mancala
+    const gamesWithDice = ['ur', 'senet'];
+    const hasDice = gamesWithDice.includes(gameKey);
+    
+    // Setup dice button - show/hide based on game
+    const diceBtn = Utils.$('#roll-dice-btn');
+    if (diceBtn) {
+        if (hasDice) {
+            diceBtn.classList.remove('hidden');
+            diceBtn.onclick = () => {
+                if (currentGame && currentGame.rollDice) {
+                    currentGame.rollDice();
+                }
+            };
+        } else {
+            diceBtn.classList.add('hidden');
+        }
+    }
+    
+    // Setup rules button
+    const rulesBtn = Utils.$('#rules-btn');
+    if (rulesBtn) {
+        rulesBtn.onclick = () => showGameRules(gameKey);
+    }
+    
+    // Setup resign button
+    const resignBtn = Utils.$('#resign-btn');
+    if (resignBtn) {
+        resignBtn.onclick = () => {
+            if (confirm('Are you sure you want to resign?')) {
+                if (currentGame) {
+                    currentGame.gameOver = true;
+                    currentGame.winner = currentGame.currentPlayer === 1 ? 2 : 1;
+                    currentGame.onGameEnd(currentGame.winner);
+                }
+            }
+        };
+    }
+    
+    Utils.toast(`Starting ${gameConfig.name}`, 'success');
+}
+
+function updateTurnIndicator() {
+    const indicator = Utils.$('#turn-indicator');
+    if (!indicator || !currentGame) return;
+    
+    const isYourTurn = currentGame.options.mode !== 'ai' || 
+                       currentGame.currentPlayer === currentGame.options.playerSide;
+    
+    indicator.className = isYourTurn ? 'your-turn' : 'opponent-turn';
+    indicator.textContent = isYourTurn ? 'Your Turn' : "Opponent's Turn";
+}
+
+// Update player names in the game UI
+function updatePlayerNames(gameKey) {
+    const player1Name = Utils.$('.player-1 .player-name');
+    const player2Name = Utils.$('.player-2 .player-name');
+    const player1Avatar = Utils.$('.player-1 .player-avatar');
+    const player2Avatar = Utils.$('.player-2 .player-avatar');
+    const player1Label = Utils.$('.player-1 .player-label');
+    const player2Label = Utils.$('.player-2 .player-label');
+    const player1Dot = Utils.$('.player-1 .piece-dot');
+    const player2Dot = Utils.$('.player-2 .piece-dot');
+    const player1ColorText = Utils.$('.player-1 .piece-color-text');
+    const player2ColorText = Utils.$('.player-2 .piece-color-text');
+    
+    // Determine if player is side 1 or 2
+    const playerSide = currentGame?.options?.playerSide || 1;
+    
+    if (player1Name) {
+        // Show user's name if signed in, otherwise "You"
+        const userName = Auth.isSignedIn() ? (Auth.getUserName() || 'You') : 'You';
+        player1Name.textContent = userName;
+    }
+    
+    // Set labels based on which side player is on
+    if (player1Label) {
+        player1Label.textContent = playerSide === 1 ? '(You)' : '(Opponent)';
+        player1Label.className = 'player-label ' + (playerSide === 1 ? 'you-label' : 'opponent-label');
+    }
+    if (player2Label) {
+        player2Label.textContent = playerSide === 2 ? '(You)' : '(Opponent)';
+        player2Label.className = 'player-label ' + (playerSide === 2 ? 'you-label' : 'opponent-label');
+    }
+    
+    // Get piece colors from equipped items or defaults
+    const equippedPieces = Auth.getEquipped?.('piece');
+    const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+    const myPieceColor = pieceColors?.primary || '#F5F5DC';
+    
+    // Set piece color indicators
+    if (player1Dot) {
+        player1Dot.style.background = playerSide === 1 ? myPieceColor : '#1A1A1A';
+    }
+    if (player2Dot) {
+        player2Dot.style.background = playerSide === 2 ? myPieceColor : '#1A1A1A';
+    }
+    if (player1ColorText) {
+        player1ColorText.textContent = playerSide === 1 ? 'Your Pieces' : 'Opponent\'s Pieces';
+    }
+    if (player2ColorText) {
+        player2ColorText.textContent = playerSide === 2 ? 'Your Pieces' : 'Opponent\'s Pieces';
+    }
+    
+    // Set player 1 avatar (user's equipped avatar)
+    if (player1Avatar) {
+        const equippedAvatar = Auth.getEquipped?.('avatar');
+        if (equippedAvatar && window.ShopAssets) {
+            const svg = window.ShopAssets.getSVG(equippedAvatar);
+            if (svg) {
+                player1Avatar.innerHTML = svg;
+            }
+        } else {
+            // Default avatar
+            player1Avatar.innerHTML = '';
+        }
+    }
+    
+    if (player2Name) {
+        player2Name.textContent = 'AI Opponent';
+    }
+    
+    // AI gets no avatar (or default)
+    if (player2Avatar) {
+        player2Avatar.innerHTML = '';
+    }
+}
+
+// Show game rules popup while playing
+function showGameRules(gameKey) {
+    const game = CONFIG.games[gameKey];
+    if (!game) return;
+    
+    const content = Utils.$('#rules-modal-content');
+    if (content) {
+        content.innerHTML = `
+            <h2>${game.name} - Rules</h2>
+            <div class="rules-content">
+                ${game.rules}
+            </div>
+        `;
+    }
+    Utils.showModal('rules-modal');
+}
+
+// Check and hide ads for premium users
+function checkPremiumStatus() {
+    if (Auth.isSignedIn() && Auth.isPremium()) {
+        document.body.classList.add('premium-user');
+        // Hide AdSense ads
+        Utils.$$('.adsbygoogle, [data-ad-slot]').forEach(ad => {
+            ad.style.display = 'none';
+        });
+    } else {
+        document.body.classList.remove('premium-user');
+    }
+}
+
+// Show game info modal
+function showGameInfo(gameKey) {
+    const game = CONFIG.games[gameKey];
+    if (!game) return;
+    
+    const content = Utils.$('#game-info-content');
+    if (!content) return;
+    
+    content.innerHTML = `
+        <h2>${game.name}</h2>
+        <p class="game-era">${game.era}</p>
+        <p>${game.description}</p>
+        
+        <div class="game-info-tabs">
+            <button class="tab-btn active" onclick="showInfoTab('rules', '${gameKey}')">Rules</button>
+            <button class="tab-btn" onclick="showInfoTab('history', '${gameKey}')">History</button>
+        </div>
+        
+        <div id="info-tab-content">
+            ${game.rules}
+        </div>
+        
+        <div class="game-info-actions">
+            <button class="btn-primary" onclick="Utils.hideModal('game-info-modal'); startQuickGame('${gameKey}');">
+                Play Now
+            </button>
+        </div>
+    `;
+    
+    Utils.showModal('game-info-modal');
+}
+
+function showInfoTab(tab, gameKey) {
+    const game = CONFIG.games[gameKey];
+    if (!game) return;
+    
+    const content = Utils.$('#info-tab-content');
+    if (!content) return;
+    
+    content.innerHTML = tab === 'rules' ? game.rules : game.history;
+    
+    // Update tab buttons
+    Utils.$$('.game-info-tabs .tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.toLowerCase() === tab);
+    });
+}
+
+// Modals
+function initModals() {
+    // Close buttons
+    Utils.$$('.modal-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = btn.closest('.modal');
+            if (modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    });
+    
+    // Click outside to close
+    Utils.$$('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    });
+    
+    // Auth button
+    const authBtn = Utils.$('#auth-btn');
+    if (authBtn) {
+        authBtn.addEventListener('click', () => {
+            Utils.showModal('auth-modal');
+        });
+    }
+}
+
+// View toggle (desktop/mobile)
+function initViewToggle() {
+    const viewBtns = Utils.$$('.view-btn');
+    viewBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            
+            viewBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            document.body.classList.remove('desktop-view', 'mobile-view');
+            document.body.classList.add(`${view}-view`);
+            
+            // Re-render current game if exists
+            if (currentGame) {
+                currentGame.render();
+            }
+        });
+    });
+}
+
+// Shop
+function initShop() {
+    // Category navigation
+    Utils.$$('.shop-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+            
+            Utils.$$('.shop-nav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            Utils.$$('.shop-section').forEach(sec => {
+                sec.classList.toggle('active', sec.dataset.category === category);
+            });
+        });
+    });
+    
+    // Load shop items
+    loadShopItems();
+}
+
+function loadShopItems() {
+    
+    
+    // Board skins
+    const boardsGrid = Utils.$('#boards-grid');
+    if (boardsGrid) {
+        boardsGrid.innerHTML = '';
+        CONFIG.shopItems.boards.forEach(item => {
+            boardsGrid.appendChild(createShopItemCard(item, 'board'));
+        });
+    }
+    
+    // Pieces
+    const piecesGrid = Utils.$('#pieces-grid');
+    if (piecesGrid) {
+        piecesGrid.innerHTML = '';
+        CONFIG.shopItems.pieces.forEach(item => {
+            piecesGrid.appendChild(createShopItemCard(item, 'piece'));
+        });
+    }
+    
+    // Avatars
+    const avatarsGrid = Utils.$('#avatars-grid');
+    if (avatarsGrid) {
+        avatarsGrid.innerHTML = '';
+        CONFIG.shopItems.avatars.forEach(item => {
+            avatarsGrid.appendChild(createShopItemCard(item, 'avatar'));
+        });
+    }
+}
+
+function createShopItemCard(item, type) {
+    const owned = Auth.ownsItem(item.id);
+    const equipped = Auth.isEquipped(item.id);
+    
+    // Get SVG from ShopAssets
+    const svg = window.ShopAssets?.getSVG(item.id);
+    
+    
+    const previewEl = Utils.createElement('div', { class: 'item-preview' });
+    if (svg) {
+        previewEl.innerHTML = svg;
+    } else {
+        // Fallback colored circle
+        const colors = {
+            'board': 'linear-gradient(135deg, #D4AF37, #8B6914)',
+            'piece': 'linear-gradient(135deg, #2ECC71, #1D6F3C)',
+            'avatar': 'linear-gradient(135deg, #9B59B6, #6C3483)'
+        };
+        const itemType = item.id.split('_')[0];
+        const fallback = Utils.createElement('div', {
+            class: 'item-icon-fallback',
+            style: { background: colors[itemType] || colors.piece }
+        });
+        previewEl.appendChild(fallback);
+    }
+    
+    // Create action button
+    let actionBtn;
+    if (owned) {
+        if (equipped) {
+            actionBtn = Utils.createElement('button', { 
+                class: 'btn-equipped', 
+                onClick: () => unequipItem(item.id, type) 
+            }, ['✓ Equipped']);
+        } else {
+            actionBtn = Utils.createElement('button', { 
+                class: 'btn-secondary', 
+                onClick: () => equipItem(item.id, type) 
+            }, ['Equip']);
+        }
+    } else {
+        actionBtn = Utils.createElement('button', { 
+            class: 'btn-primary', 
+            onClick: () => purchaseItem(item) 
+        }, ['Buy']);
+    }
+    
+    return Utils.createElement('div', { class: `shop-item ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}` }, [
+        previewEl,
+        Utils.createElement('h4', {}, [item.name]),
+        Utils.createElement('div', { class: 'item-price' }, [
+            owned ? (equipped ? 'Equipped' : 'Owned ✓') : `${item.price} coins`
+        ]),
+        actionBtn
+    ]);
+}
+
+// Equip an item
+async function equipItem(itemId, type) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    await Auth.equipItem(itemId, type);
+    Utils.toast(`Equipped ${itemId.split('_').slice(1).join(' ')}!`, 'success');
+    loadShopItems();
+}
+
+// Unequip an item
+async function unequipItem(itemId, type) {
+    if (!Auth.isSignedIn()) return;
+    
+    await Auth.unequipItem(type);
+    Utils.toast('Item unequipped', 'info');
+    loadShopItems();
+}
+
+async function purchaseItem(item) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    if (Auth.ownsItem(item.id)) {
+        Utils.toast('You already own this item', 'info');
+        return;
+    }
+    
+    const success = await Auth.spendCoins(item.price);
+    if (success) {
+        await Auth.addToInventory(item.id);
+        Utils.toast(`Purchased ${item.name}!`, 'success');
+        loadShopItems();
+    } else {
+        Utils.toast('Not enough coins', 'error');
+    }
+}
+
+function equipItem(itemId, type) {
+    Utils.toast(`Equipped ${itemId}`, 'success');
+    // In a full implementation, this would update user preferences
+}
+
+// Subscriptions
+async function subscribe(plan) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const priceId = plan === 'monthly' 
+        ? CONFIG.pricing.stripePrices.monthly 
+        : CONFIG.pricing.stripePrices.annual;
+    
+    try {
+        Utils.toast('Redirecting to checkout...', 'info');
+        
+        const response = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                priceId,
+                userId: Auth.user.uid,
+                userEmail: Auth.user.email
+            })
+        });
+        
+        if (response.ok) {
+            const { url } = await response.json();
+            window.location.href = url;
+        } else {
+            throw new Error('Failed to create checkout session');
+        }
+    } catch (error) {
+        console.error('Subscription error:', error);
+        Utils.toast('Unable to process subscription. Please try again.', 'error');
+    }
+}
+
+async function buyCoins(amount) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const priceId = CONFIG.pricing.stripePrices[`coins_${amount}`];
+    
+    if (!priceId) {
+        Utils.toast('Invalid coin package', 'error');
+        return;
+    }
+    
+    try {
+        Utils.toast('Redirecting to checkout...', 'info');
+        
+        const response = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                priceId,
+                userId: Auth.user.uid,
+                userEmail: Auth.user.email
+            })
+        });
+        
+        if (response.ok) {
+            const { url } = await response.json();
+            window.location.href = url;
+        } else {
+            throw new Error('Failed to create checkout session');
+        }
+    } catch (error) {
+        console.error('Purchase error:', error);
+        Utils.toast('Unable to process purchase. Please try again.', 'error');
+    }
+}
+
+// Lobby and Multiplayer
+function initSocket() {
+    try {
+        socket = io(CONFIG.socketUrl, {
+            transports: ['websocket'],
+            reconnection: true
+        });
+        
+        // Expose socket globally for games to emit moves
+        window.socket = socket;
+        
+        socket.on('connect', () => {
+            console.log('Connected to game server');
+            updateOnlineCount();
+        });
+        
+        socket.on('room-created', (data) => {
+            Utils.toast('Room created! Share the link with a friend.', 'success');
+            Utils.copyToClipboard(window.location.origin + '?room=' + data.roomId);
+        });
+        
+        socket.on('player-joined', (data) => {
+            Utils.toast(`${data.playerName} joined the room!`, 'info');
+        });
+        
+        socket.on('game-start', (data) => {
+            startMultiplayerGame(data);
+        });
+        
+        socket.on('opponent-move', (data) => {
+            if (currentGame && currentGame.receiveMove) {
+                // Use receiveMove for proper remote move handling
+                currentGame.receiveMove(data.move);
+                // Reset timer after opponent's move
+                resetTurnTimer();
+            } else if (currentGame) {
+                // Fallback
+                currentGame.makeMove(data.move, true);
+                resetTurnTimer();
+            }
+        });
+        
+        socket.on('turn-skipped', (data) => {
+            Utils.toast(`${data.playerName}'s turn was skipped (timeout)`, 'warning');
+            if (currentGame) {
+                // Force turn switch
+                currentGame.currentPlayer = currentGame.currentPlayer === 1 ? 2 : 1;
+                currentGame.render?.();
+                resetTurnTimer();
+            }
+        });
+        
+        socket.on('opponent-left', () => {
+            Utils.toast('Opponent left the game', 'warning');
+            stopTurnTimer();
+            sessionStorage.removeItem('activeGame');
+            currentRoomId = null;
+            if (currentGame) {
+                currentGame.gameOver = true;
+            }
+        });
+        
+        socket.on('opponent-reconnected', (data) => {
+            Utils.toast(`${data.playerName} reconnected`, 'success');
+        });
+        
+        socket.on('rejoin-success', (data) => {
+            Utils.toast('Reconnected to game', 'success');
+            startMultiplayerGame(data);
+            
+            // Restore game state if available
+            if (data.gameState && currentGame) {
+                // Apply saved state
+                Object.assign(currentGame, data.gameState);
+                currentGame.render?.();
+            }
+        });
+        
+        socket.on('rejoin-failed', (data) => {
+            Utils.toast(data.reason || 'Could not rejoin game', 'error');
+            sessionStorage.removeItem('activeGame');
+            currentRoomId = null;
+        });
+        
+        socket.on('stats-update', (data) => {
+            Utils.$('#online-count').textContent = data.online || '--';
+            Utils.$('#games-today').textContent = data.gamesToday || '--';
+        });
+        
+    } catch (error) {
+        console.error('Socket connection error:', error);
+    }
+}
+
+function updateOnlineCount() {
+    if (socket && socket.connected) {
+        socket.emit('get-stats');
+    }
+}
+
+function loadRooms() {
+    const roomsList = Utils.$('#rooms-list');
+    if (!roomsList) return;
+    
+    // In production, this would fetch from the server
+    roomsList.innerHTML = '<li class="empty-state">No open rooms. Create one!</li>';
+    
+    if (socket && socket.connected) {
+        socket.emit('get-rooms');
+        
+        socket.once('rooms-list', (rooms) => {
+            if (rooms.length === 0) {
+                roomsList.innerHTML = '<li class="empty-state">No open rooms. Create one!</li>';
+                return;
+            }
+            
+            roomsList.innerHTML = '';
+            rooms.forEach(room => {
+                const timeText = room.timeLimit === 0 ? 'No limit' : `${room.timeLimit}s`;
+                const li = Utils.createElement('li', {}, [
+                    Utils.createElement('div', { class: 'room-info' }, [
+                        Utils.createElement('span', { class: 'room-name' }, [room.name]),
+                        Utils.createElement('span', { class: 'room-game' }, [
+                            (CONFIG.games[room.game]?.name || room.game) + ` • ⏱️ ${timeText}`
+                        ])
+                    ]),
+                    Utils.createElement('button', { 
+                        class: 'btn-primary btn-small',
+                        onClick: () => joinRoom(room.id)
+                    }, ['Join'])
+                ]);
+                roomsList.appendChild(li);
+            });
+        });
+    }
+}
+
+function createRoom() {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const game = Utils.$('#lobby-game-select').value;
+    const name = Utils.$('#room-name-input').value || `${Auth.user.displayName}'s Room`;
+    const isPrivate = Utils.$('.toggle-btn.active')?.dataset.mode === 'private';
+    const timeLimit = parseInt(Utils.$('#time-limit-select')?.value || '60');
+    
+    if (socket && socket.connected) {
+        socket.emit('create-room', {
+            game,
+            name,
+            isPrivate,
+            timeLimit,
+            hostId: Auth.user.uid,
+            hostName: Auth.user.displayName,
+            hostAvatar: Auth.getEquipped?.('avatar') || null,
+            hostPieces: Auth.getEquipped?.('piece') || null
+        });
+    } else {
+        Utils.toast('Not connected to server', 'error');
+    }
+}
+
+function joinRoom(roomId) {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    if (socket && socket.connected) {
+        socket.emit('join-room', {
+            roomId,
+            playerId: Auth.user.uid,
+            playerName: Auth.user.displayName,
+            playerAvatar: Auth.getEquipped?.('avatar') || null,
+            playerPieces: Auth.getEquipped?.('piece') || null
+        });
+    }
+}
+
+function startMultiplayerGame(data) {
+    // Clean up any existing game first
+    cleanupCurrentGame();
+    
+    navigateTo('play');
+    
+    const canvas = Utils.$('#game-canvas');
+    const GameClass = GameClasses[data.game];
+    
+    const gameConfig = CONFIG.games[data.game];
+    canvas.width = gameConfig.boardSize.width;
+    canvas.height = gameConfig.boardSize.height;
+    currentGameKey = data.game;
+    currentRoomId = data.roomId;
+    
+    // Get opponent's cosmetics for display
+    const me = data.players?.find(p => p.side === data.playerSide);
+    const opponent = data.players?.find(p => p.side !== data.playerSide);
+    
+    currentGame = new GameClass(canvas, {
+        mode: 'online',
+        playerSide: data.playerSide,
+        roomId: data.roomId,
+        opponentPieces: opponent?.pieces || null,
+        opponentAvatar: opponent?.avatar || null
+    });
+    
+    window.currentGame = currentGame;
+    
+    // Save session for reconnection
+    saveGameSession(data.game, 'online', data.roomId, {
+        playerSide: data.playerSide
+    });
+    
+    // Default avatar SVG (simple silhouette)
+    const defaultAvatarSVG = `<svg viewBox="0 0 100 100" width="40" height="40"><circle cx="50" cy="50" r="48" fill="#2A241C" stroke="#D4AF37" stroke-width="2"/><circle cx="50" cy="38" r="18" fill="#D4AF37"/><ellipse cx="50" cy="82" rx="30" ry="22" fill="#D4AF37"/></svg>`;
+    
+    // Update player panels with names and avatars
+    const player1Name = Utils.$('.player-1 .player-name');
+    const player2Name = Utils.$('.player-2 .player-name');
+    const player1Avatar = Utils.$('.player-1 .player-avatar');
+    const player2Avatar = Utils.$('.player-2 .player-avatar');
+    
+    if (data.players && data.players.length === 2) {
+        if (player1Name) player1Name.textContent = me?.name || 'You';
+        if (player2Name) player2Name.textContent = opponent?.name || 'Opponent';
+        
+        // Set avatars - use custom if available, otherwise default
+        if (player1Avatar) {
+            if (me?.avatar && window.ShopAssets) {
+                player1Avatar.innerHTML = window.ShopAssets.getSVG(me.avatar) || defaultAvatarSVG;
+            } else {
+                player1Avatar.innerHTML = defaultAvatarSVG;
+            }
+        }
+        if (player2Avatar) {
+            if (opponent?.avatar && window.ShopAssets) {
+                player2Avatar.innerHTML = window.ShopAssets.getSVG(opponent.avatar) || defaultAvatarSVG;
+            } else {
+                player2Avatar.innerHTML = defaultAvatarSVG;
+            }
+        }
+    }
+    
+    // Setup timer if time limit is set
+    turnTimeLimit = data.timeLimit || 60;
+    if (turnTimeLimit > 0) {
+        const timerContainer = Utils.$('#game-timer-container');
+        if (timerContainer) timerContainer.classList.remove('hidden');
+        startTurnTimer();
+    }
+    
+    // Games that use dice: ur, senet
+    const gamesWithDice = ['ur', 'senet'];
+    const hasDice = gamesWithDice.includes(data.game);
+    
+    // Show/hide dice button based on game
+    const diceBtn = Utils.$('#roll-dice-btn');
+    if (diceBtn) {
+        if (hasDice) {
+            diceBtn.classList.remove('hidden');
+        } else {
+            diceBtn.classList.add('hidden');
+        }
+    }
+    
+    // Update game status
+    const status = Utils.$('#game-status');
+    if (status) {
+        status.textContent = `Playing: ${gameConfig.name} (Online)`;
+    }
+    
+    Utils.toast('Game started! Good luck!', 'success');
+}
+
+// Quick match
+function findQuickMatch() {
+    if (!Auth.isSignedIn()) {
+        Utils.showModal('auth-modal');
+        return;
+    }
+    
+    const game = Utils.$('#quick-match-game').value;
+    const btn = Utils.$('#quick-match-btn');
+    const spinner = btn.querySelector('.loading-spinner');
+    const text = btn.querySelector('.btn-text');
+    
+    spinner.classList.remove('hidden');
+    text.textContent = 'Searching...';
+    
+    if (socket && socket.connected) {
+        socket.emit('find-match', {
+            game: game === 'any' ? null : game,
+            playerId: Auth.user.uid,
+            playerName: Auth.user.displayName,
+            rating: Auth.getRating(game)
+        });
+        
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            spinner.classList.add('hidden');
+            text.textContent = 'Find Match';
+        }, 30000);
+    }
+}
+
+// Rankings
+async function loadRankings(game = 'overall') {
+    const tbody = Utils.$('#rankings-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+    
+    try {
+        // In production, fetch from Firebase
+        const db = firebase.database();
+        let query;
+        
+        if (game === 'overall') {
+            query = db.ref('users').orderByChild('stats/gamesWon').limitToLast(50);
+        } else {
+            query = db.ref('users').orderByChild(`ratings/${game}`).limitToLast(50);
+        }
+        
+        const snapshot = await query.once('value');
+        const users = [];
+        
+        snapshot.forEach(child => {
+            const data = child.val();
+            users.push({
+                name: data.displayName,
+                rating: game === 'overall' ? 
+                    Math.round(Object.values(data.ratings || {}).reduce((a, b) => a + b, 0) / 5) :
+                    data.ratings?.[game] || 1200,
+                wins: data.stats?.gamesWon || 0,
+                losses: data.stats?.gamesLost || 0
+            });
+        });
+        
+        // Sort and display
+        users.sort((a, b) => b.rating - a.rating);
+        
+        tbody.innerHTML = '';
+        users.slice(0, 50).forEach((user, index) => {
+            const winRate = user.wins + user.losses > 0 ?
+                Math.round((user.wins / (user.wins + user.losses)) * 100) : 0;
+            
+            const tr = Utils.createElement('tr', {}, [
+                Utils.createElement('td', {}, [`#${index + 1}`]),
+                Utils.createElement('td', {}, [user.name]),
+                Utils.createElement('td', {}, [user.rating.toString()]),
+                Utils.createElement('td', {}, [`${user.wins}/${user.losses}`]),
+                Utils.createElement('td', {}, [`${winRate}%`])
+            ]);
+            tbody.appendChild(tr);
+        });
+        
+        // Update podium
+        updatePodium(users.slice(0, 3));
+        
+    } catch (error) {
+        console.error('Load rankings error:', error);
+        tbody.innerHTML = '<tr><td colspan="5">Failed to load rankings</td></tr>';
+    }
+}
+
+function updatePodium(topThree) {
+    const positions = ['first', 'second', 'third'];
+    
+    topThree.forEach((user, index) => {
+        const podiumItem = Utils.$(`.podium-item.${positions[index]}`);
+        if (podiumItem) {
+            podiumItem.querySelector('.podium-name').textContent = user?.name || '--';
+            podiumItem.querySelector('.podium-rating').textContent = user?.rating || '--';
+        }
+    });
+}
+
+// Rankings tabs
+Utils.$$('.rankings-tabs .tab-btn')?.forEach(btn => {
+    btn.addEventListener('click', () => {
+        Utils.$$('.rankings-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadRankings(btn.dataset.game);
+    });
+});
+
+// Update stats periodically
+function updateStats() {
+    setInterval(updateOnlineCount, 30000);
+}
+
+// Filter buttons in lobby
+Utils.$$('.filter-btn')?.forEach(btn => {
+    btn.addEventListener('click', () => {
+        Utils.$$('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Filter rooms by game type
+    });
+});
+
+// Toggle buttons
+Utils.$$('.toggle-btn')?.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const group = btn.parentElement;
+        group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+// ============================================
+// PROFILE PAGE
+// ============================================
+
+async function loadProfile() {
+    const signInBtn = Utils.$('#profile-sign-in-btn');
+    const signOutBtn = Utils.$('#profile-sign-out-btn');
+    
+    if (!Auth.isSignedIn()) {
+        Utils.$('#profile-name').textContent = 'Guest';
+        Utils.$('#profile-membership').innerHTML = '<span class="membership-badge free">Sign in to track progress</span>';
+        Utils.$('#profile-coins').textContent = '0';
+        Utils.$('#profile-games').textContent = '0';
+        Utils.$('#profile-wins').textContent = '0';
+        Utils.$('#profile-losses').textContent = '0';
+        Utils.$('#cancel-sub-btn')?.classList.add('hidden');
+        
+        // Show sign in, hide sign out
+        signInBtn?.classList.remove('hidden');
+        signOutBtn?.classList.add('hidden');
+        return;
+    }
+    
+    // User is signed in - show sign out, hide sign in
+    signInBtn?.classList.add('hidden');
+    signOutBtn?.classList.remove('hidden');
+    
+    // Refresh profile from Firebase to get latest data
+    await Auth.refreshProfile();
+    
+    const profile = Auth.userProfile;
+    console.log('Profile loaded:', profile);
+    console.log('Inventory:', profile?.inventory);
+    
+    // Basic info
+    Utils.$('#profile-name').textContent = Auth.getUserName();
+    Utils.$('#profile-coins').textContent = Utils.formatNumber(profile?.coins || 0);
+    Utils.$('#profile-games').textContent = profile?.stats?.gamesPlayed || 0;
+    Utils.$('#profile-wins').textContent = profile?.stats?.gamesWon || 0;
+    Utils.$('#profile-losses').textContent = profile?.stats?.gamesLost || 0;
+    
+    // Membership status and cancel button
+    const membershipEl = Utils.$('#profile-membership');
+    const cancelBtn = Utils.$('#cancel-sub-btn');
+    
+    if (Auth.isPremium()) {
+        if (profile?.cancelAtPeriodEnd) {
+            membershipEl.innerHTML = '<span class="membership-badge premium">★ Premium (Canceling)</span>';
+            cancelBtn?.classList.add('hidden');
+        } else {
+            membershipEl.innerHTML = '<span class="membership-badge premium">★ Premium Member</span>';
+            cancelBtn?.classList.remove('hidden');
+        }
+    } else {
+        membershipEl.innerHTML = '<span class="membership-badge free">Free Account</span>';
+        cancelBtn?.classList.add('hidden');
+    }
+    
+    // Equipped avatar
+    const equippedAvatar = Auth.getEquipped('avatar');
+    const avatarPreview = Utils.$('#profile-avatar');
+    if (equippedAvatar && window.ShopAssets) {
+        avatarPreview.innerHTML = window.ShopAssets.getSVG(equippedAvatar) || '';
+    }
+    
+    // Load equipped items display
+    loadEquippedDisplay();
+    
+    // Load collection
+    loadCollection('boards');
+    
+    // Load ratings
+    loadRatingsDisplay();
+    
+    // Setup collection tabs
+    Utils.$$('.collection-tabs .tab-btn').forEach(btn => {
+        btn.onclick = () => {
+            Utils.$$('.collection-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadCollection(btn.dataset.tab);
+        };
+    });
+}
+
+function loadEquippedDisplay() {
+    const types = ['board', 'piece', 'avatar'];
+    
+    types.forEach(type => {
+        const equipped = Auth.getEquipped(type);
+        const previewEl = Utils.$(`#equipped-${type}`);
+        const nameEl = Utils.$(`#equipped-${type}-name`);
+        
+        if (equipped && window.ShopAssets) {
+            const svg = window.ShopAssets.getSVG(equipped);
+            if (previewEl && svg) previewEl.innerHTML = svg;
+            
+            // Find item name
+            const allItems = [...(CONFIG.shopItems?.boards || []), 
+                            ...(CONFIG.shopItems?.pieces || []), 
+                            ...(CONFIG.shopItems?.avatars || [])];
+            const item = allItems.find(i => i.id === equipped);
+            if (nameEl) nameEl.textContent = item?.name || equipped;
+        } else {
+            if (previewEl) previewEl.innerHTML = '<span style="color:#666">None</span>';
+            if (nameEl) nameEl.textContent = 'Default';
+        }
+    });
+}
+
+function loadCollection(category) {
+    const grid = Utils.$('#collection-grid');
+    if (!grid) return;
+    
+    const inventory = Auth.userProfile?.inventory || [];
+    
+    // Get items for this category
+    let items = [];
+    if (category === 'boards') items = CONFIG.shopItems?.boards || [];
+    else if (category === 'pieces') items = CONFIG.shopItems?.pieces || [];
+    else if (category === 'avatars') items = CONFIG.shopItems?.avatars || [];
+    
+    // Filter to owned items
+    const owned = items.filter(item => inventory.includes(item.id));
+    
+    if (owned.length === 0) {
+        grid.innerHTML = '<p class="empty-collection">No items in this category. Visit the shop!</p>';
+        return;
+    }
+    
+    grid.innerHTML = '';
+    owned.forEach(item => {
+        const isEquipped = Auth.isEquipped(item.id);
+        const svg = window.ShopAssets?.getSVG(item.id) || '';
+        
+        const el = Utils.createElement('div', { 
+            class: `collection-item ${isEquipped ? 'equipped' : ''}`,
+            onClick: () => toggleEquip(item.id, category.slice(0, -1)) // Remove 's' from end
+        }, []);
+        
+        el.innerHTML = `${svg}<div class="item-name">${item.name}</div>`;
+        grid.appendChild(el);
+    });
+}
+
+async function toggleEquip(itemId, type) {
+    if (Auth.isEquipped(itemId)) {
+        await Auth.unequipItem(type);
+        Utils.toast('Item unequipped', 'info');
+    } else {
+        await Auth.equipItem(itemId, type);
+        Utils.toast('Item equipped!', 'success');
+    }
+    loadProfile(); // Refresh display
+}
+
+function loadRatingsDisplay() {
+    const grid = Utils.$('#ratings-grid');
+    if (!grid) return;
+    
+    const ratings = Auth.userProfile?.ratings || {};
+    const games = ['ur', 'senet', 'hnefatafl', 'morris', 'mancala'];
+    const gameNames = {
+        ur: 'Royal Game of Ur',
+        senet: 'Senet',
+        hnefatafl: 'Hnefatafl',
+        morris: "Nine Men's Morris",
+        mancala: 'Mancala'
+    };
+    
+    grid.innerHTML = '';
+    games.forEach(game => {
+        const rating = ratings[game] || 1200;
+        const card = Utils.createElement('div', { class: 'rating-card' }, [
+            Utils.createElement('div', { class: 'game-name' }, [gameNames[game]]),
+            Utils.createElement('div', { class: 'rating-value' }, [rating.toString()])
+        ]);
+        grid.appendChild(card);
+    });
+}
+
+// Show Buy Coins section in shop
+function showBuyCoins() {
+    // Navigate to shop if not there
+    navigateTo('shop');
+    
+    // Click the Buy Coins tab
+    setTimeout(() => {
+        const coinsTab = document.querySelector('.shop-nav-btn[data-category="coins"]');
+        if (coinsTab) {
+            coinsTab.click();
+        }
+    }, 100);
+}
+
+// Cancel subscription
+async function cancelSubscription() {
+    if (!Auth.isSignedIn()) return;
+    
+    // Confirm with user
+    const confirmed = confirm(
+        'Are you sure you want to cancel your subscription?\n\n' +
+        'You will keep Premium access until the end of your current billing period.'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        Utils.toast('Canceling subscription...', 'info');
+        
+        const response = await fetch('/api/cancel-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: Auth.user.uid })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            Utils.toast('Subscription canceled. You\'ll have access until the end of your billing period.', 'success');
+            // Refresh profile to update UI
+            await Auth.refreshProfile();
+            loadProfile();
+        } else {
+            throw new Error(data.error || 'Failed to cancel subscription');
+        }
+    } catch (error) {
+        console.error('Cancel subscription error:', error);
+        Utils.toast('Failed to cancel subscription. Please try again.', 'error');
+    }
+}
+
+// ============================================
+// TURN TIMER
+// ============================================
+
+function startTurnTimer() {
+    stopTurnTimer();
+    turnTimeRemaining = turnTimeLimit;
+    updateTimerDisplay();
+    
+    // Only start ticking if it's MY turn
+    if (isMyTurn()) {
+        turnTimer = setInterval(() => {
+            turnTimeRemaining--;
+            updateTimerDisplay();
+            
+            if (turnTimeRemaining <= 0) {
+                stopTurnTimer();
+                handleTimerExpired();
+            }
+        }, 1000);
+    }
+}
+
+function stopTurnTimer() {
+    if (turnTimer) {
+        clearInterval(turnTimer);
+        turnTimer = null;
+    }
+}
+
+// Call this when turn switches - resets timer and starts/stops based on whose turn
+function onTurnChange() {
+    if (turnTimeLimit <= 0) return;
+    
+    stopTurnTimer();
+    turnTimeRemaining = turnTimeLimit;
+    updateTimerDisplay();
+    
+    // Only tick if it's my turn now
+    if (isMyTurn()) {
+        turnTimer = setInterval(() => {
+            turnTimeRemaining--;
+            updateTimerDisplay();
+            
+            if (turnTimeRemaining <= 0) {
+                stopTurnTimer();
+                handleTimerExpired();
+            }
+        }, 1000);
+    }
+}
+
+// Check if it's currently my turn
+function isMyTurn() {
+    if (!currentGame) return false;
+    return currentGame.currentPlayer === currentGame.options?.playerSide;
+}
+
+function resetTurnTimer() {
+    // Called after a move - trigger turn change logic
+    onTurnChange();
+}
+
+function updateTimerDisplay() {
+    const timerValue = Utils.$('#turn-timer');
+    const timerFill = Utils.$('#timer-fill');
+    
+    if (timerValue) {
+        timerValue.textContent = turnTimeRemaining;
+        timerValue.classList.remove('warning', 'critical');
+        
+        // Only show warning colors if it's my turn
+        if (isMyTurn()) {
+            if (turnTimeRemaining <= 10) {
+                timerValue.classList.add('critical');
+            } else if (turnTimeRemaining <= 20) {
+                timerValue.classList.add('warning');
+            }
+        }
+    }
+    
+    if (timerFill) {
+        const percent = (turnTimeRemaining / turnTimeLimit) * 100;
+        timerFill.style.width = percent + '%';
+        timerFill.classList.remove('warning', 'critical');
+        
+        // Only show warning colors if it's my turn
+        if (isMyTurn()) {
+            if (turnTimeRemaining <= 10) {
+                timerFill.classList.add('critical');
+            } else if (turnTimeRemaining <= 20) {
+                timerFill.classList.add('warning');
+            }
+        }
+    }
+}
+
+function handleTimerExpired() {
+    if (!currentGame || currentGame.gameOver) return;
+    
+    // In multiplayer, timeout means turn skip (not forfeit)
+    if (currentGame.options?.mode === 'online') {
+        if (currentGame.currentPlayer === currentGame.options.playerSide) {
+            // You ran out of time - skip your turn
+            Utils.toast('Time\'s up! Your turn was skipped.', 'warning');
+            socket?.emit('turn-timeout', {
+                roomId: currentGame.options.roomId,
+                player: currentGame.currentPlayer
+            });
+            
+            // Switch turn locally
+            currentGame.currentPlayer = currentGame.currentPlayer === 1 ? 2 : 1;
+            currentGame.render?.();
+            resetTurnTimer();
+        }
+    } else {
+        // AI game - skip turn
+        Utils.toast('Time\'s up! Turn skipped.', 'warning');
+        if (currentGame.endTurn) {
+            currentGame.endTurn(false);
+            currentGame.render?.();
+        }
+        resetTurnTimer();
+    }
+}
+
+// ============================================
+// GAME CONTROLS
+// ============================================
+
+function showCurrentGameRules() {
+    if (currentGameKey) {
+        showGameRules(currentGameKey);
+    } else {
+        Utils.toast('No game in progress', 'info');
+    }
+}
+
+function resignGame() {
+    if (!currentGame || currentGame.gameOver) {
+        Utils.toast('No game in progress', 'info');
+        return;
+    }
+    
+    const confirmed = confirm('Are you sure you want to resign?');
+    if (!confirmed) return;
+    
+    currentGame.gameOver = true;
+    stopTurnTimer();
+    
+    // Emit resign to server if online
+    if (currentGame.options?.mode === 'online') {
+        socket?.emit('game-end', {
+            roomId: currentGame.options.roomId,
+            winner: currentGame.options.playerSide === 1 ? 2 : 1,
+            reason: 'resign'
+        });
+    }
+    
+    // Update stats
+    if (Auth.isSignedIn()) {
+        Auth.updateStats(false); // Record as loss
+    }
+    
+    // Show result
+    Utils.showModal('game-end-modal');
+    const content = Utils.$('#game-end-content');
+    if (content) {
+        content.innerHTML = `
+            <h2 style="color: #8B2500">You Resigned</h2>
+            <p>Better luck next time!</p>
+            ${getShareButtons(false)}
+            <button class="btn-primary" onclick="Utils.hideModal('game-end-modal'); navigateTo('games');">Back to Games</button>
+        `;
+    }
+    
+    window.SoundManager?.play('lose');
+}
+
+// ============================================
+// SOCIAL SHARING
+// ============================================
+
+function getShareButtons(isWin) {
+    const gameNames = {
+        ur: 'Royal Game of Ur',
+        senet: 'Senet',
+        hnefatafl: 'Hnefatafl',
+        morris: "Nine Men's Morris",
+        mancala: 'Mancala'
+    };
+    const gameName = gameNames[currentGameKey] || 'an ancient board game';
+    const message = isWin 
+        ? `🏆 I just won a game of ${gameName} on Ancient Board Games! Play 5000-year-old games online.`
+        : `I just played ${gameName} on Ancient Board Games! Try these 5000-year-old games.`;
+    const url = 'https://ancientboardgames.io';
+    
+    return `
+        <div class="share-buttons">
+            <button class="share-btn twitter" onclick="shareTwitter('${encodeURIComponent(message)}', '${url}')">
+                𝕏 Share
+            </button>
+            <button class="share-btn facebook" onclick="shareFacebook('${url}')">
+                f Share
+            </button>
+            <button class="share-btn copy" onclick="copyShareLink('${url}')">
+                📋 Copy Link
+            </button>
+        </div>
+    `;
+}
+
+function shareTwitter(message, url) {
+    window.open(`https://twitter.com/intent/tweet?text=${message}&url=${encodeURIComponent(url)}`, '_blank');
+}
+
+function shareFacebook(url) {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+}
+
+function copyShareLink(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        Utils.toast('Link copied!', 'success');
+    });
+}
+
+// ============================================
+// GAME STATISTICS TRACKING
+// ============================================
+
+function trackGameStart(gameKey) {
+    if (!Auth.isSignedIn()) return;
+    
+    // Track game start in Firebase
+    const db = firebase.database();
+    db.ref(`users/${Auth.user.uid}/stats/gamesPlayed`).transaction(current => {
+        return (current || 0) + 1;
+    });
+}
+
+function trackGameEnd(isWin, gameKey) {
+    if (!Auth.isSignedIn()) return;
+    
+    const db = firebase.database();
+    const userRef = db.ref(`users/${Auth.user.uid}`);
+    
+    if (isWin) {
+        userRef.child('stats/gamesWon').transaction(current => (current || 0) + 1);
+    } else {
+        userRef.child('stats/gamesLost').transaction(current => (current || 0) + 1);
+    }
+    
+    // Update rating (simple ELO-like system)
+    const ratingChange = isWin ? 15 : -10;
+    userRef.child(`ratings/${gameKey}`).transaction(current => {
+        const newRating = (current || 1200) + ratingChange;
+        return Math.max(100, newRating); // Minimum rating of 100
+    });
+}
+
+// ============================================
+// AUTHENTICATION FUNCTIONS
+// ============================================
+
+function showSignInOptions() {
+    Utils.showModal('auth-modal');
+}
+
+async function signOut() {
+    try {
+        await firebase.auth().signOut();
+        Utils.toast('Signed out successfully', 'success');
+        
+        // Update UI
+        Utils.$('#user-info')?.classList.add('hidden');
+        Utils.$('#auth-btn')?.classList.remove('hidden');
+        
+        // Refresh profile page if on it
+        if (currentPage === 'profile') {
+            loadProfile();
+        }
+    } catch (error) {
+        console.error('Sign out error:', error);
+        Utils.toast('Failed to sign out', 'error');
+    }
+}
+
+// Toggle sound on/off
+function toggleSound() {
+    const btn = Utils.$('#sound-toggle');
+    const enabled = window.SoundManager?.toggle();
+    
+    if (btn) {
+        if (enabled) {
+            btn.classList.remove('muted');
+            // Play a test sound to confirm it works
+            window.SoundManager?.play('click');
+        } else {
+            btn.classList.add('muted');
+        }
+    }
+    
+    Utils.toast(enabled ? 'Sound enabled' : 'Sound disabled', 'info');
+}
+
+// Initialize sound button state on load
+function initSoundButton() {
+    const btn = Utils.$('#sound-toggle');
+    if (btn && window.SoundManager) {
+        if (!window.SoundManager.enabled) {
+            btn.classList.add('muted');
+        }
+    }
+}
+
+// Global functions for HTML onclick handlers
+window.navigateTo = navigateTo;
+window.startQuickGame = startQuickGame;
+window.showDifficultyModal = showDifficultyModal;
+window.startGameWithDifficulty = startGameWithDifficulty;
+window.showGameInfo = showGameInfo;
+window.showInfoTab = showInfoTab;
+window.showGameRules = showGameRules;
+window.showCurrentGameRules = showCurrentGameRules;
+window.resignGame = resignGame;
+window.subscribe = subscribe;
+window.buyCoins = buyCoins;
+window.showBuyCoins = showBuyCoins;
+window.cancelSubscription = cancelSubscription;
+window.toggleSound = toggleSound;
+window.showSignInOptions = showSignInOptions;
+window.signOut = signOut;
+window.shareTwitter = shareTwitter;
+window.shareFacebook = shareFacebook;
+window.copyShareLink = copyShareLink;
+window.getShareButtons = getShareButtons;
+window.stopTurnTimer = stopTurnTimer;
+window.onTurnChange = onTurnChange;
+window.reconnectToGame = reconnectToGame;
+window.abandonGame = abandonGame;
+window.equipItem = equipItem;
+window.unequipItem = unequipItem;
+window.toggleEquip = toggleEquip;
+window.createRoom = createRoom;
+window.joinRoom = joinRoom;
+window.findQuickMatch = findQuickMatch;
+
+// Event handlers for lobby buttons
+document.addEventListener('DOMContentLoaded', () => {
+    // Init sound button state
+    initSoundButton();
+    
+    const createRoomBtn = Utils.$('#create-room-btn');
+    if (createRoomBtn) {
+        createRoomBtn.addEventListener('click', createRoom);
+    }
+    
+    const quickMatchBtn = Utils.$('#quick-match-btn');
+    if (quickMatchBtn) {
+        quickMatchBtn.addEventListener('click', findQuickMatch);
+    }
+    
+    const refreshRoomsBtn = Utils.$('#refresh-rooms');
+    if (refreshRoomsBtn) {
+        refreshRoomsBtn.addEventListener('click', loadRooms);
+    }
+});
