@@ -559,6 +559,68 @@ io.on('connection', (socket) => {
         });
     });
     
+    // Handle leaving a room
+    socket.on('leave-room', (data) => {
+        const room = rooms.get(data.roomId);
+        if (!room) return;
+        
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (player) {
+            socket.leave(data.roomId);
+            socket.to(data.roomId).emit('opponent-left', { playerId: player.id });
+            
+            // Remove player from room
+            room.players = room.players.filter(p => p.socketId !== socket.id);
+            
+            // Delete empty rooms
+            if (room.players.length === 0) {
+                rooms.delete(data.roomId);
+            }
+        }
+    });
+    
+    // Handle rejoining a room (after tab switch)
+    socket.on('rejoin-room', (data) => {
+        const room = rooms.get(data.roomId);
+        if (!room) {
+            socket.emit('rejoin-failed', { reason: 'Room no longer exists' });
+            return;
+        }
+        
+        // Find player in room by ID
+        const player = room.players.find(p => p.id === data.playerId);
+        if (!player) {
+            socket.emit('rejoin-failed', { reason: 'Player not in room' });
+            return;
+        }
+        
+        // Update socket ID
+        player.socketId = socket.id;
+        socket.join(data.roomId);
+        
+        // Send current game state
+        socket.emit('rejoin-success', {
+            roomId: data.roomId,
+            game: room.game,
+            timeLimit: room.timeLimit,
+            playerSide: player.side,
+            gameState: room.gameState,
+            players: room.players.map(p => ({
+                id: p.id,
+                name: p.name,
+                side: p.side,
+                avatar: p.avatar,
+                pieces: p.pieces
+            }))
+        });
+        
+        // Notify opponent
+        socket.to(data.roomId).emit('opponent-reconnected', {
+            playerId: player.id,
+            playerName: player.name
+        });
+    });
+    
     // Handle disconnect
     socket.on('disconnect', () => {
         console.log('Player disconnected:', socket.id);
