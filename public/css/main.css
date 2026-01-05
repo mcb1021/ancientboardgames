@@ -2571,3 +2571,87 @@ body.desktop-view .game-sidebar { display: flex; }
         margin-right: 0;
     }
 }
+
+/* ============================================
+   RECONNECT TOAST STYLES
+   ============================================ */
+
+.reconnect-toast {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-gold);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    max-width: 320px;
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(212, 175, 55, 0.2);
+}
+
+.reconnect-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.reconnect-icon {
+    font-size: 1.5rem;
+}
+
+.reconnect-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.reconnect-text strong {
+    color: var(--color-gold);
+    font-family: var(--font-display);
+}
+
+.reconnect-text span {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.reconnect-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-reconnect {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-gold);
+    color: var(--color-bg-dark);
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-reconnect:hover {
+    background: var(--color-gold-light);
+}
+
+.btn-abandon {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-text-muted);
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-abandon:hover {
+    color: var(--color-error);
+    border-color: var(--color-error);
+}
+
+.reconnect-toast.fade-out {
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease;
+}
