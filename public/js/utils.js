@@ -316,6 +316,52 @@ const Utils = {
             });
             return gradient;
         }
+    },
+    
+    // Get canvas coordinates from mouse/touch event (handles CSS scaling)
+    getCanvasCoords(canvas, event) {
+        const rect = canvas.getBoundingClientRect();
+        
+        // Get the correct clientX/clientY (touch or mouse)
+        let clientX, clientY;
+        if (event.touches && event.touches.length > 0) {
+            clientX = event.touches[0].clientX;
+            clientY = event.touches[0].clientY;
+        } else if (event.changedTouches && event.changedTouches.length > 0) {
+            clientX = event.changedTouches[0].clientX;
+            clientY = event.changedTouches[0].clientY;
+        } else {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        }
+        
+        // Calculate scale factors (CSS size vs actual canvas size)
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        // Return scaled coordinates
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    },
+    
+    // Add both click and touch listeners to canvas
+    addCanvasClickHandler(canvas, handler) {
+        // Prevent double-firing
+        let lastTouchEnd = 0;
+        
+        canvas.addEventListener('click', (e) => {
+            // Ignore click if it's from a touch (within 500ms)
+            if (Date.now() - lastTouchEnd < 500) return;
+            handler(e);
+        });
+        
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault(); // Prevent zoom/scroll
+            lastTouchEnd = Date.now();
+            handler(e);
+        });
     }
 };
 
