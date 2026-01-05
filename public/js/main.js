@@ -142,12 +142,14 @@ function initNavigation() {
 }
 
 function navigateTo(page) {
-    // Clean up if leaving play page (for AI games only - multiplayer keeps session)
-    if (currentPage === 'play' && page !== 'play') {
+    // If leaving play page with an active game, save state for potential reconnect
+    if (currentPage === 'play' && page !== 'play' && currentGame && !currentGame.gameOver) {
+        // Save current game state to session
         const session = getGameSession();
-        // Only cleanup AI games, not multiplayer
-        if (!session || session.mode !== 'online') {
-            cleanupCurrentGame();
+        if (session && currentGame.getState) {
+            session.gameState = currentGame.getState();
+            session.timestamp = Date.now();
+            sessionStorage.setItem('activeGame', JSON.stringify(session));
         }
     }
     
@@ -170,16 +172,133 @@ function navigateTo(page) {
     // Page-specific initialization
     if (page === 'games') {
         renderGamesSelection();
+        // Check for active game session and show reconnect option
+        checkForActiveGame();
     } else if (page === 'rankings') {
         loadRankings();
     } else if (page === 'lobby') {
         loadRooms();
     } else if (page === 'profile') {
         loadProfile();
+    } else if (page === 'home') {
+        checkForActiveGame();
     }
     
     // Scroll to top
     window.scrollTo(0, 0);
+}
+
+// Check if there's an active game to reconnect to
+function checkForActiveGame() {
+    const session = getGameSession();
+    if (!session) return;
+    
+    // Don't show if already on play page or game is too old (30 min)
+    if (currentPage === 'play') return;
+    if (Date.now() - session.timestamp > 30 * 60 * 1000) {
+        sessionStorage.removeItem('activeGame');
+        return;
+    }
+    
+    const gameName = CONFIG.games[session.gameKey]?.name || session.gameKey;
+    const modeText = session.mode === 'online' ? 'Online' : `AI (${session.options?.aiDifficulty || 'medium'})`;
+    
+    // Show reconnect toast with action
+    showReconnectPrompt(gameName, modeText, session);
+}
+
+function showReconnectPrompt(gameName, modeText, session) {
+    // Create custom toast with buttons
+    const container = Utils.$('#toast-container');
+    if (!container) return;
+    
+    const toast = Utils.createElement('div', { class: 'toast reconnect-toast' }, []);
+    toast.innerHTML = `
+        <div class="reconnect-content">
+            <span class="reconnect-icon">🎮</span>
+            <div class="reconnect-text">
+                <strong>Game in progress</strong>
+                <span>${gameName} (${modeText})</span>
+            </div>
+        </div>
+        <div class="reconnect-actions">
+            <button class="btn-reconnect" onclick="reconnectToGame()">Continue</button>
+            <button class="btn-abandon" onclick="abandonGame()">New Game</button>
+        </div>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-dismiss after 10 seconds
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 10000);
+}
+
+function reconnectToGame() {
+    const session = getGameSession();
+    if (!session) return;
+    
+    // Remove reconnect toast
+    Utils.$('.reconnect-toast')?.remove();
+    
+    if (session.mode === 'online' && session.roomId) {
+        // Online game - try server rejoin
+        if (socket && socket.connected) {
+            socket.emit('rejoin-room', {
+                roomId: session.roomId,
+                playerId: Auth.user?.uid
+            });
+        }
+    } else {
+        // AI game - restore locally
+        const GameClass = GameClasses[session.gameKey];
+        if (!GameClass) return;
+        
+        navigateTo('play');
+        
+        const canvas = Utils.$('#game-canvas');
+        const gameConfig = CONFIG.games[session.gameKey];
+        canvas.width = gameConfig.boardSize.width;
+        canvas.height = gameConfig.boardSize.height;
+        currentGameKey = session.gameKey;
+        
+        currentGame = new GameClass(canvas, {
+            mode: 'ai',
+            aiDifficulty: session.options?.aiDifficulty || 'medium',
+            playerSide: 1
+        });
+        
+        // Restore game state if available
+        if (session.gameState && currentGame) {
+            try {
+                Object.assign(currentGame, session.gameState);
+                currentGame.render?.();
+                Utils.toast('Game restored!', 'success');
+            } catch (e) {
+                console.warn('Could not restore game state:', e);
+            }
+        }
+        
+        window.currentGame = currentGame;
+        
+        const difficulty = session.options?.aiDifficulty || 'medium';
+        Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
+        updateTurnIndicator();
+        updatePlayerNames(session.gameKey);
+    }
+}
+
+function abandonGame() {
+    // Remove reconnect toast
+    Utils.$('.reconnect-toast')?.remove();
+    
+    // Clear session
+    sessionStorage.removeItem('activeGame');
+    currentRoomId = null;
+    
+    Utils.toast('Previous game abandoned', 'info');
 }
 
 // Games selection page
@@ -301,6 +420,9 @@ function startQuickGame(gameKey, difficulty = 'medium') {
     });
     
     window.currentGame = currentGame;
+    
+    // Save session for reconnection (AI games too)
+    saveGameSession(gameKey, 'ai', null, { aiDifficulty: difficulty });
     
     // Update UI
     Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
@@ -1713,6 +1835,8 @@ window.copyShareLink = copyShareLink;
 window.getShareButtons = getShareButtons;
 window.stopTurnTimer = stopTurnTimer;
 window.onTurnChange = onTurnChange;
+window.reconnectToGame = reconnectToGame;
+window.abandonGame = abandonGame;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.toggleEquip = toggleEquip;
