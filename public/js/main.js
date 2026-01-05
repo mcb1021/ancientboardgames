@@ -479,11 +479,49 @@ function updatePlayerNames(gameKey) {
     const player2Name = Utils.$('.player-2 .player-name');
     const player1Avatar = Utils.$('.player-1 .player-avatar');
     const player2Avatar = Utils.$('.player-2 .player-avatar');
+    const player1Label = Utils.$('.player-1 .player-label');
+    const player2Label = Utils.$('.player-2 .player-label');
+    const player1Dot = Utils.$('.player-1 .piece-dot');
+    const player2Dot = Utils.$('.player-2 .piece-dot');
+    const player1ColorText = Utils.$('.player-1 .piece-color-text');
+    const player2ColorText = Utils.$('.player-2 .piece-color-text');
+    
+    // Determine if player is side 1 or 2
+    const playerSide = currentGame?.options?.playerSide || 1;
     
     if (player1Name) {
         // Show user's name if signed in, otherwise "You"
         const userName = Auth.isSignedIn() ? (Auth.getUserName() || 'You') : 'You';
         player1Name.textContent = userName;
+    }
+    
+    // Set labels based on which side player is on
+    if (player1Label) {
+        player1Label.textContent = playerSide === 1 ? '(You)' : '(Opponent)';
+        player1Label.className = 'player-label ' + (playerSide === 1 ? 'you-label' : 'opponent-label');
+    }
+    if (player2Label) {
+        player2Label.textContent = playerSide === 2 ? '(You)' : '(Opponent)';
+        player2Label.className = 'player-label ' + (playerSide === 2 ? 'you-label' : 'opponent-label');
+    }
+    
+    // Get piece colors from equipped items or defaults
+    const equippedPieces = Auth.getEquipped?.('piece');
+    const pieceColors = window.ShopAssets?.getColors(equippedPieces);
+    const myPieceColor = pieceColors?.primary || '#F5F5DC';
+    
+    // Set piece color indicators
+    if (player1Dot) {
+        player1Dot.style.background = playerSide === 1 ? myPieceColor : '#1A1A1A';
+    }
+    if (player2Dot) {
+        player2Dot.style.background = playerSide === 2 ? myPieceColor : '#1A1A1A';
+    }
+    if (player1ColorText) {
+        player1ColorText.textContent = playerSide === 1 ? 'Your Pieces' : 'Opponent\'s Pieces';
+    }
+    if (player2ColorText) {
+        player2ColorText.textContent = playerSide === 2 ? 'Your Pieces' : 'Opponent\'s Pieces';
     }
     
     // Set player 1 avatar (user's equipped avatar)
