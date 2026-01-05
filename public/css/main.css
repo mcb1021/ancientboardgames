@@ -2563,13 +2563,7 @@ body.desktop-view .game-sidebar { display: flex; }
         text-align: left;
     }
     
-    .control-btn span:last-child {
-        display: none; /* Hide text, show only icons on small screens */
-    }
-    
-    .control-btn .btn-icon {
-        margin-right: 0;
-    }
+    /* Button text now handled by complete mobile override below */
 }
 
 /* ============================================
@@ -2849,4 +2843,156 @@ body.desktop-view .game-sidebar {
 
 body.desktop-view .game-history {
     display: block !important;
+}
+
+/* ============================================
+   MOBILE GAME LAYOUT - COMPLETE OVERRIDE
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Main game container - vertical stack */
+    .game-container {
+        display: flex !important;
+        flex-direction: column !important;
+        padding: var(--space-sm) !important;
+        gap: var(--space-md) !important;
+    }
+    
+    /* Game board first */
+    .game-board-container {
+        order: 1 !important;
+        width: 100% !important;
+        padding: var(--space-sm) !important;
+    }
+    
+    /* Left sidebar (player 1 + game info) */
+    .game-sidebar.left {
+        order: 2 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        gap: var(--space-sm) !important;
+    }
+    
+    /* Right sidebar (player 2 + controls) */
+    .game-sidebar.right {
+        order: 3 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        gap: var(--space-sm) !important;
+    }
+    
+    /* Player panels - horizontal layout */
+    .player-panel {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        padding: var(--space-md) !important;
+        gap: var(--space-md) !important;
+    }
+    
+    .player-panel .player-avatar {
+        width: 50px !important;
+        height: 50px !important;
+        flex-shrink: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .player-panel .player-info {
+        text-align: left !important;
+        flex: 1 !important;
+    }
+    
+    .player-panel .player-name {
+        font-size: 1rem !important;
+    }
+    
+    .player-panel .player-label {
+        display: inline !important;
+        font-size: 0.8rem !important;
+    }
+    
+    /* Piece color indicator - inline */
+    .piece-color-indicator {
+        flex-shrink: 0 !important;
+        margin-top: 0 !important;
+        padding: var(--space-xs) var(--space-sm) !important;
+    }
+    
+    .piece-dot {
+        width: 20px !important;
+        height: 20px !important;
+    }
+    
+    .piece-color-text {
+        font-size: 0.7rem !important;
+        white-space: nowrap !important;
+    }
+    
+    /* Game info panel */
+    .game-info-panel {
+        padding: var(--space-md) !important;
+    }
+    
+    /* Control buttons - ALWAYS show text */
+    .game-controls {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: var(--space-sm) !important;
+        width: 100% !important;
+    }
+    
+    .control-btn {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: var(--space-sm) !important;
+        min-height: 60px !important;
+        gap: 4px !important;
+    }
+    
+    .control-btn .btn-icon {
+        font-size: 1.3rem !important;
+        margin: 0 !important;
+    }
+    
+    .control-btn .btn-text {
+        display: block !important;
+        font-size: 0.75rem !important;
+        text-align: center !important;
+    }
+    
+    /* Hide move history on mobile */
+    .game-history {
+        display: none !important;
+    }
+    
+    /* Timer container */
+    .game-timer-container {
+        padding: var(--space-sm) !important;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 400px) {
+    .player-panel {
+        flex-wrap: wrap !important;
+    }
+    
+    .piece-color-indicator {
+        width: 100% !important;
+        justify-content: center !important;
+        margin-top: var(--space-xs) !important;
+    }
+    
+    .control-btn {
+        min-height: 50px !important;
+    }
+    
+    .control-btn .btn-text {
+        font-size: 0.65rem !important;
+    }
 }
