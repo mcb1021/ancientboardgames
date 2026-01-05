@@ -61,7 +61,7 @@ class MancalaGame {
         
         this.reset();
         this.boundHandleClick = this.handleClick.bind(this);
-        this.canvas.addEventListener('click', this.boundHandleClick);
+        Utils.addCanvasClickHandler(this.canvas, this.boundHandleClick);
         this.destroyed = false;
         this.render();
     }
@@ -339,9 +339,10 @@ class MancalaGame {
         if (this.animating || this.gameOver) return;
         if (this.options.mode === 'ai' && this.currentPlayer !== this.options.playerSide) return;
         
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Get scaled coordinates (handles CSS scaling and touch)
+        const coords = Utils.getCanvasCoords(this.canvas, e);
+        const x = coords.x;
+        const y = coords.y;
         
         // Check which pit was clicked
         const validMoves = this.getValidMoves();
@@ -547,6 +548,7 @@ class MancalaGame {
         this.destroyed = true;
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.canvas.removeEventListener('touchend', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
     

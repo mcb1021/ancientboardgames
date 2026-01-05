@@ -58,7 +58,7 @@ class HnefataflGame {
         
         this.reset();
         this.boundHandleClick = this.handleClick.bind(this);
-        this.canvas.addEventListener('click', this.boundHandleClick);
+        Utils.addCanvasClickHandler(this.canvas, this.boundHandleClick);
         this.destroyed = false;
         this.render();
     }
@@ -331,9 +331,10 @@ class HnefataflGame {
         if (this.gameOver) return;
         if (this.options.mode === 'ai' && this.currentPlayer !== this.options.playerSide) return;
         
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left - this.boardPadding;
-        const y = e.clientY - rect.top - this.boardPadding;
+        // Get scaled coordinates (handles CSS scaling and touch)
+        const coords = Utils.getCanvasCoords(this.canvas, e);
+        const x = coords.x - this.boardPadding;
+        const y = coords.y - this.boardPadding;
         const c = Math.floor(x / this.cellSize);
         const r = Math.floor(y / this.cellSize);
         
@@ -489,6 +490,7 @@ class HnefataflGame {
         this.destroyed = true;
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.canvas.removeEventListener('touchend', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
     

@@ -76,7 +76,8 @@ class UrGame {
         // Bind events - store references for removal
         this.boundHandleClick = this.handleClick.bind(this);
         this.boundHandleMouseMove = this.handleMouseMove.bind(this);
-        this.canvas.addEventListener('click', this.boundHandleClick);
+        // Use touch-friendly handler for clicks
+        Utils.addCanvasClickHandler(this.canvas, this.boundHandleClick);
         this.canvas.addEventListener('mousemove', this.boundHandleMouseMove);
         
         // Animation state
@@ -484,9 +485,10 @@ class UrGame {
         if (this.animating || this.gameOver) return;
         if (this.options.mode === 'ai' && this.currentPlayer !== this.options.playerSide) return;
         
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Get scaled coordinates (handles CSS scaling and touch)
+        const coords = Utils.getCanvasCoords(this.canvas, e);
+        const x = coords.x;
+        const y = coords.y;
         
         // Check if clicked on dice area (roll)
         if (this.diceResult === null) {
@@ -528,8 +530,10 @@ class UrGame {
     // Handle mouse move for hover effects
     handleMouseMove(e) {
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
         
         this.hoverCell = null;
         
@@ -905,6 +909,7 @@ class UrGame {
         this.animating = false;
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.canvas.removeEventListener('touchend', this.boundHandleClick);
         this.canvas.removeEventListener('mousemove', this.boundHandleMouseMove);
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

@@ -62,7 +62,7 @@ class SenetGame {
         
         this.reset();
         this.boundHandleClick = this.handleClick.bind(this);
-        this.canvas.addEventListener('click', this.boundHandleClick);
+        Utils.addCanvasClickHandler(this.canvas, this.boundHandleClick);
         this.destroyed = false;
         this.render();
     }
@@ -234,9 +234,10 @@ class SenetGame {
     }
     
     handleClick(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Get scaled coordinates (handles CSS scaling and touch)
+        const coords = Utils.getCanvasCoords(this.canvas, e);
+        const x = coords.x;
+        const y = coords.y;
         
         if (!this.diceResult) {
             this.rollDice();
@@ -332,6 +333,7 @@ class SenetGame {
         this.destroyed = true;
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.canvas.removeEventListener('touchend', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
     

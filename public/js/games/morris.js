@@ -61,7 +61,8 @@ class MorrisGame {
         
         this.reset();
         this.boundHandleClick = this.handleClick.bind(this);
-        this.canvas.addEventListener('click', this.boundHandleClick);
+        // Use touch-friendly handler
+        Utils.addCanvasClickHandler(this.canvas, this.boundHandleClick);
         this.destroyed = false;
         this.render();
     }
@@ -402,16 +403,17 @@ class MorrisGame {
         // In online mode, only allow clicks on your turn
         if (this.options.mode === 'online' && this.currentPlayer !== this.options.playerSide) return;
         
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Get scaled coordinates (handles CSS scaling and touch)
+        const coords = Utils.getCanvasCoords(this.canvas, e);
+        const x = coords.x;
+        const y = coords.y;
         
         // Find clicked position
         let clickedPos = -1;
         for (let i = 0; i < 24; i++) {
             const pos = this.positions[i];
             const dist = Math.sqrt(Math.pow(x - pos.x, 2) + Math.pow(y - pos.y, 2));
-            if (dist < 20) {
+            if (dist < 25) { // Slightly larger hit area for mobile
                 clickedPos = i;
                 break;
             }
@@ -620,6 +622,7 @@ class MorrisGame {
         this.destroyed = true;
         this.gameOver = true;
         this.canvas.removeEventListener('click', this.boundHandleClick);
+        this.canvas.removeEventListener('touchend', this.boundHandleClick);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
     
