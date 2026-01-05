@@ -10,6 +10,7 @@ let currentGameKey = null;
 let turnTimer = null;
 let turnTimeLimit = 60;
 let turnTimeRemaining = 60;
+let currentRoomId = null; // Track current multiplayer room
 
 // Game class mapping - with fallback checks
 const GameClasses = {};
@@ -20,6 +21,94 @@ if (typeof SenetGame !== 'undefined') GameClasses.senet = SenetGame;
 if (typeof HnefataflGame !== 'undefined') GameClasses.hnefatafl = HnefataflGame;
 if (typeof MorrisGame !== 'undefined') GameClasses.morris = MorrisGame;
 if (typeof MancalaGame !== 'undefined') GameClasses.mancala = MancalaGame;
+
+// ============================================
+// GAME CLEANUP & SESSION MANAGEMENT
+// ============================================
+
+function cleanupCurrentGame() {
+    // Stop timer
+    stopTurnTimer();
+    
+    // Destroy current game instance
+    if (currentGame) {
+        try {
+            currentGame.destroy();
+        } catch (e) {
+            console.warn('Error destroying game:', e);
+        }
+        currentGame = null;
+        window.currentGame = null;
+    }
+    
+    // Clear game key
+    currentGameKey = null;
+    
+    // Leave multiplayer room if in one
+    if (currentRoomId && socket && socket.connected) {
+        socket.emit('leave-room', { roomId: currentRoomId });
+        currentRoomId = null;
+    }
+    
+    // Clear session storage for game state
+    sessionStorage.removeItem('activeGame');
+    
+    // Reset timer display
+    turnTimeRemaining = 60;
+    const timerContainer = Utils.$('#game-timer-container');
+    if (timerContainer) timerContainer.classList.add('hidden');
+    
+    // Clear canvas
+    const canvas = Utils.$('#game-canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+}
+
+function saveGameSession(gameKey, mode, roomId = null, options = {}) {
+    const sessionData = {
+        gameKey,
+        mode,
+        roomId,
+        options,
+        timestamp: Date.now()
+    };
+    sessionStorage.setItem('activeGame', JSON.stringify(sessionData));
+}
+
+function getGameSession() {
+    try {
+        const data = sessionStorage.getItem('activeGame');
+        if (!data) return null;
+        const session = JSON.parse(data);
+        // Session expires after 30 minutes
+        if (Date.now() - session.timestamp > 30 * 60 * 1000) {
+            sessionStorage.removeItem('activeGame');
+            return null;
+        }
+        return session;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Handle page visibility change (tab switch)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        // Tab became visible - check if we should reconnect
+        const session = getGameSession();
+        if (session && session.mode === 'online' && session.roomId) {
+            // Try to rejoin the room
+            if (socket && socket.connected) {
+                socket.emit('rejoin-room', {
+                    roomId: session.roomId,
+                    playerId: Auth.user?.uid
+                });
+            }
+        }
+    }
+});
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
@@ -53,6 +142,15 @@ function initNavigation() {
 }
 
 function navigateTo(page) {
+    // Clean up if leaving play page (for AI games only - multiplayer keeps session)
+    if (currentPage === 'play' && page !== 'play') {
+        const session = getGameSession();
+        // Only cleanup AI games, not multiplayer
+        if (!session || session.mode !== 'online') {
+            cleanupCurrentGame();
+        }
+    }
+    
     // Hide all pages
     Utils.$$('.page').forEach(p => p.classList.remove('active'));
     
@@ -177,6 +275,9 @@ function startQuickGame(gameKey, difficulty = 'medium') {
         return;
     }
     
+    // Clean up any existing game first
+    cleanupCurrentGame();
+    
     // Navigate to play page
     navigateTo('play');
     
@@ -184,15 +285,13 @@ function startQuickGame(gameKey, difficulty = 'medium') {
     const canvas = Utils.$('#game-canvas');
     if (!canvas) return;
     
-    // Destroy existing game
-    if (currentGame) {
-        currentGame.destroy();
-    }
-    
     // Set canvas size based on game
     const gameConfig = CONFIG.games[gameKey];
     canvas.width = gameConfig.boardSize.width;
     canvas.height = gameConfig.boardSize.height;
+    
+    // Store current game key
+    currentGameKey = gameKey;
     
     // Create new game
     currentGame = new GameClass(canvas, {
@@ -703,9 +802,33 @@ function initSocket() {
         socket.on('opponent-left', () => {
             Utils.toast('Opponent left the game', 'warning');
             stopTurnTimer();
+            sessionStorage.removeItem('activeGame');
+            currentRoomId = null;
             if (currentGame) {
                 currentGame.gameOver = true;
             }
+        });
+        
+        socket.on('opponent-reconnected', (data) => {
+            Utils.toast(`${data.playerName} reconnected`, 'success');
+        });
+        
+        socket.on('rejoin-success', (data) => {
+            Utils.toast('Reconnected to game', 'success');
+            startMultiplayerGame(data);
+            
+            // Restore game state if available
+            if (data.gameState && currentGame) {
+                // Apply saved state
+                Object.assign(currentGame, data.gameState);
+                currentGame.render?.();
+            }
+        });
+        
+        socket.on('rejoin-failed', (data) => {
+            Utils.toast(data.reason || 'Could not rejoin game', 'error');
+            sessionStorage.removeItem('activeGame');
+            currentRoomId = null;
         });
         
         socket.on('stats-update', (data) => {
@@ -806,22 +929,19 @@ function joinRoom(roomId) {
 }
 
 function startMultiplayerGame(data) {
+    // Clean up any existing game first
+    cleanupCurrentGame();
+    
     navigateTo('play');
     
     const canvas = Utils.$('#game-canvas');
     const GameClass = GameClasses[data.game];
     
-    if (currentGame) {
-        currentGame.destroy();
-    }
-    
-    // Stop any existing timer
-    stopTurnTimer();
-    
     const gameConfig = CONFIG.games[data.game];
     canvas.width = gameConfig.boardSize.width;
     canvas.height = gameConfig.boardSize.height;
     currentGameKey = data.game;
+    currentRoomId = data.roomId;
     
     // Get opponent's cosmetics for display
     const me = data.players?.find(p => p.side === data.playerSide);
@@ -836,6 +956,11 @@ function startMultiplayerGame(data) {
     });
     
     window.currentGame = currentGame;
+    
+    // Save session for reconnection
+    saveGameSession(data.game, 'online', data.roomId, {
+        playerSide: data.playerSide
+    });
     
     // Default avatar SVG (simple silhouette)
     const defaultAvatarSVG = `<svg viewBox="0 0 100 100" width="40" height="40"><circle cx="50" cy="50" r="48" fill="#2A241C" stroke="#D4AF37" stroke-width="2"/><circle cx="50" cy="38" r="18" fill="#D4AF37"/><ellipse cx="50" cy="82" rx="30" ry="22" fill="#D4AF37"/></svg>`;
