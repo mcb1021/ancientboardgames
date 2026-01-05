@@ -2465,3 +2465,109 @@ body.desktop-view .game-sidebar { display: flex; }
 .btn-sign-out.hidden {
     display: none;
 }
+
+/* ============================================
+   MOBILE GAME FIX - COMPREHENSIVE
+   ============================================ */
+
+/* Ensure canvas is touch-friendly */
+#game-canvas {
+    touch-action: none; /* Prevent browser handling of touch */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Mobile-first game layout */
+@media (max-width: 900px) {
+    .game-container {
+        display: flex;
+        flex-direction: column;
+        grid-template-columns: none;
+        padding: var(--space-sm);
+        gap: var(--space-sm);
+    }
+    
+    .game-board-container {
+        order: 1;
+        width: 100%;
+        padding: var(--space-md);
+    }
+    
+    #game-canvas {
+        max-width: 100%;
+        height: auto;
+    }
+    
+    .game-sidebar.left {
+        order: 2;
+        flex-direction: row;
+        width: 100%;
+    }
+    
+    .game-sidebar.right {
+        order: 3;
+        flex-direction: row;
+        width: 100%;
+    }
+    
+    .player-panel {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .game-timer-container {
+        flex: 1;
+    }
+    
+    .game-controls {
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    
+    .control-btn {
+        flex: 1;
+        min-width: 80px;
+    }
+}
+
+@media (max-width: 480px) {
+    .game-container {
+        padding: var(--space-xs);
+    }
+    
+    .game-board-container {
+        padding: var(--space-sm);
+    }
+    
+    .game-sidebar.left,
+    .game-sidebar.right {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+    
+    .player-panel {
+        flex-direction: row;
+        padding: var(--space-sm);
+    }
+    
+    .player-panel .player-avatar {
+        width: 40px;
+        height: 40px;
+        margin: 0;
+        margin-right: var(--space-sm);
+    }
+    
+    .player-info {
+        text-align: left;
+    }
+    
+    .control-btn span:last-child {
+        display: none; /* Hide text, show only icons on small screens */
+    }
+    
+    .control-btn .btn-icon {
+        margin-right: 0;
+    }
+}
