@@ -283,6 +283,19 @@ function reconnectToGame() {
         
         window.currentGame = currentGame;
         
+        // Show/hide dice button based on game
+        const gamesWithDice = ['ur', 'senet'];
+        const diceBtn = Utils.$('#roll-dice-btn');
+        if (diceBtn) {
+            const hasDice = gamesWithDice.includes(session.gameKey);
+            diceBtn.style.display = hasDice ? '' : 'none';
+            if (hasDice) {
+                diceBtn.classList.remove('hidden');
+            } else {
+                diceBtn.classList.add('hidden');
+            }
+        }
+        
         const difficulty = session.options?.aiDifficulty || 'medium';
         Utils.$('#game-status').textContent = `Playing: ${gameConfig.name} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
         updateTurnIndicator();
@@ -429,14 +442,28 @@ function startQuickGame(gameKey, difficulty = 'medium') {
     updateTurnIndicator();
     updatePlayerNames(gameKey);
     
-    // Setup dice button
+    // Games that use dice: ur, senet
+    // Games that don't use dice: morris, hnefatafl, mancala
+    const gamesWithDice = ['ur', 'senet'];
+    const hasDice = gamesWithDice.includes(gameKey);
+    
+    console.log('Game started:', gameKey, 'Has dice:', hasDice);
+    
+    // Setup dice button - show/hide based on game
     const diceBtn = Utils.$('#roll-dice-btn');
     if (diceBtn) {
-        diceBtn.onclick = () => {
-            if (currentGame && currentGame.rollDice) {
-                currentGame.rollDice();
-            }
-        };
+        // Always remove hidden first, then add if needed
+        diceBtn.style.display = hasDice ? '' : 'none';
+        if (hasDice) {
+            diceBtn.classList.remove('hidden');
+            diceBtn.onclick = () => {
+                if (currentGame && currentGame.rollDice) {
+                    currentGame.rollDice();
+                }
+            };
+        } else {
+            diceBtn.classList.add('hidden');
+        }
     }
     
     // Setup rules button
@@ -1158,6 +1185,21 @@ function startMultiplayerGame(data) {
         const timerContainer = Utils.$('#game-timer-container');
         if (timerContainer) timerContainer.classList.remove('hidden');
         startTurnTimer();
+    }
+    
+    // Games that use dice: ur, senet
+    const gamesWithDice = ['ur', 'senet'];
+    const hasDice = gamesWithDice.includes(data.game);
+    
+    // Show/hide dice button based on game
+    const diceBtn = Utils.$('#roll-dice-btn');
+    if (diceBtn) {
+        diceBtn.style.display = hasDice ? '' : 'none';
+        if (hasDice) {
+            diceBtn.classList.remove('hidden');
+        } else {
+            diceBtn.classList.add('hidden');
+        }
     }
     
     // Update game status
