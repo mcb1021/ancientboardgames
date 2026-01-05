@@ -323,9 +323,13 @@
                             <div class="player-avatar"></div>
                             <div class="player-info">
                                 <span class="player-name">Player 1</span>
+                                <span class="player-label you-label">(You)</span>
                                 <span class="player-rating">--</span>
                             </div>
-                            <div class="player-pieces"></div>
+                            <div class="piece-color-indicator">
+                                <span class="piece-dot light"></span>
+                                <span class="piece-color-text">Light Pieces</span>
+                            </div>
                         </div>
                         <div class="game-info-panel">
                             <h3>Game Info</h3>
@@ -344,9 +348,13 @@
                             <div class="player-avatar"></div>
                             <div class="player-info">
                                 <span class="player-name">Player 2</span>
+                                <span class="player-label opponent-label">(Opponent)</span>
                                 <span class="player-rating">--</span>
                             </div>
-                            <div class="player-pieces"></div>
+                            <div class="piece-color-indicator">
+                                <span class="piece-dot dark"></span>
+                                <span class="piece-color-text">Dark Pieces</span>
+                            </div>
                         </div>
                         <div class="game-timer-container hidden" id="game-timer-container">
                             <div class="timer-display">
@@ -360,15 +368,15 @@
                         <div class="game-controls">
                             <button class="control-btn" id="roll-dice-btn">
                                 <span class="btn-icon">🎲</span>
-                                <span>Roll Dice</span>
+                                <span class="btn-text">Roll Dice</span>
                             </button>
                             <button class="control-btn" id="rules-btn" onclick="showCurrentGameRules()">
                                 <span class="btn-icon">📜</span>
-                                <span>Rules</span>
+                                <span class="btn-text">Rules</span>
                             </button>
                             <button class="control-btn" id="resign-btn" onclick="resignGame()">
                                 <span class="btn-icon">🏳️</span>
-                                <span>Resign</span>
+                                <span class="btn-text">Resign</span>
                             </button>
                         </div>
                         <div class="game-history">
