@@ -23,22 +23,27 @@ const io = new Server(server, {
 // Firebase Admin SDK
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin (use environment variable for service account)
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        databaseURL: process.env.FIREBASE_DATABASE_URL
-    });
-} else {
-    // Fallback for local development
-    admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
-        databaseURL: process.env.FIREBASE_DATABASE_URL
-    });
+// Initialize Firebase Admin (use environment variable for service account).
+// Leaderboards are read here because client rules only allow a user to read their own profile.
+let db = null;
+try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            databaseURL: process.env.FIREBASE_DATABASE_URL
+        });
+    } else {
+        // Fallback for local development
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            databaseURL: process.env.FIREBASE_DATABASE_URL
+        });
+    }
+    db = admin.database();
+} catch (error) {
+    console.error('Firebase Admin init failed:', error.message);
 }
-
-const db = admin.database();
 
 // Stripe setup
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -687,6 +692,66 @@ setInterval(() => {
         matchmakingQueue.set(game, filtered);
     });
 }, 60000);
+
+const LEADERBOARD_GAMES = ['ur', 'senet', 'hnefatafl', 'morris', 'mancala'];
+
+// Public counters. 0 is a real value (no games yet / nobody else connected).
+app.get('/api/stats', (req, res) => {
+    res.json({
+        online: onlinePlayers.size,
+        gamesToday: gamesToday
+    });
+});
+
+// Public leaderboard. Client reads of /users are denied by database rules.
+app.get('/api/leaderboard', async (req, res) => {
+    const requested = String(req.query.game || 'overall');
+    const game = requested === 'overall' || LEADERBOARD_GAMES.includes(requested)
+        ? requested
+        : 'overall';
+
+    if (!db) {
+        return res.json({ game, players: [] });
+    }
+
+    try {
+        const snapshot = await db.ref('users').once('value');
+        const players = [];
+
+        snapshot.forEach((child) => {
+            const data = child.val();
+            if (!data || typeof data !== 'object') return;
+
+            const wins = Number(data.stats?.gamesWon) || 0;
+            const losses = Number(data.stats?.gamesLost) || 0;
+            const played = Number(data.stats?.gamesPlayed) || 0;
+            if (wins + losses + played <= 0) return;
+
+            const ratings = data.ratings || {};
+            let rating;
+            if (game === 'overall') {
+                const values = LEADERBOARD_GAMES
+                    .map((key) => Number(ratings[key]))
+                    .filter((value) => Number.isFinite(value));
+                rating = values.length
+                    ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+                    : 1200;
+            } else {
+                const value = Number(ratings[game]);
+                rating = Number.isFinite(value) ? value : 1200;
+            }
+
+            const name = String(data.displayName || data.username || 'Player').trim().slice(0, 40) || 'Player';
+            players.push({ name, rating, wins, losses });
+        });
+
+        players.sort((a, b) => b.rating - a.rating || b.wins - a.wins || a.name.localeCompare(b.name));
+        res.json({ game, players: players.slice(0, 50) });
+    } catch (error) {
+        console.error('Leaderboard error:', error);
+        res.status(500).json({ error: 'Failed to load rankings' });
+    }
+});
 
 // Reset daily stats at midnight
 const resetDailyStats = () => {
