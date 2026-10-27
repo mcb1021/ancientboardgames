@@ -112,6 +112,9 @@ document.addEventListener('visibilitychange', () => {
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
+    const footerYear = Utils.$('#footer-year');
+    if (footerYear) footerYear.textContent = String(new Date().getFullYear());
+
     initNavigation();
     initModals();
     initViewToggle();
@@ -573,6 +576,10 @@ function updatePlayerNames(gameKey) {
     if (player2Avatar) {
         player2Avatar.innerHTML = '';
     }
+
+    const difficulty = currentGame?.options?.aiDifficulty || 'medium';
+    const aiRating = AI_DISPLAY_RATINGS[difficulty] || AI_DISPLAY_RATINGS.medium;
+    showMatchRatings(playerSide, Auth.getRating(gameKey), aiRating);
 }
 
 // Show game rules popup while playing
@@ -1019,8 +1026,7 @@ function initSocket() {
         });
         
         socket.on('stats-update', (data) => {
-            Utils.$('#online-count').textContent = data.online || '--';
-            Utils.$('#games-today').textContent = data.gamesToday || '--';
+            applyLiveStats(data);
         });
         
     } catch (error) {
@@ -1031,6 +1037,44 @@ function initSocket() {
 function updateOnlineCount() {
     if (socket && socket.connected) {
         socket.emit('get-stats');
+    }
+}
+
+// 0 is a real count. `||` would turn it into the broken "--" placeholder.
+function applyLiveStats(data) {
+    const onlineEl = Utils.$('#online-count');
+    const gamesEl = Utils.$('#games-today');
+    const online = Number(data?.online);
+    const games = Number(data?.gamesToday);
+    if (onlineEl) onlineEl.textContent = Number.isFinite(online) ? String(online) : '0';
+    if (gamesEl) gamesEl.textContent = Number.isFinite(games) ? String(games) : '0';
+}
+
+async function refreshLiveStats() {
+    try {
+        const response = await fetch('/api/stats');
+        if (!response.ok) return;
+        applyLiveStats(await response.json());
+    } catch (error) {
+        // Keep the last numbers. The page starts at 0, not "--".
+    }
+}
+
+const AI_DISPLAY_RATINGS = { easy: 1000, medium: 1200, hard: 1500 };
+
+function setPanelRating(panelSelector, value) {
+    const el = Utils.$(`${panelSelector} .player-rating`);
+    if (!el) return;
+    el.textContent = (value === null || value === undefined || value === '') ? '' : String(value);
+}
+
+function showMatchRatings(playerSide, myRating, opponentRating) {
+    if (playerSide === 2) {
+        setPanelRating('.player-1', opponentRating);
+        setPanelRating('.player-2', myRating);
+    } else {
+        setPanelRating('.player-1', myRating);
+        setPanelRating('.player-2', opponentRating);
     }
 }
 
@@ -1177,6 +1221,13 @@ function startMultiplayerGame(data) {
                 player2Avatar.innerHTML = defaultAvatarSVG;
             }
         }
+
+        const opponentRating = Number(opponent?.rating);
+        showMatchRatings(
+            data.playerSide,
+            Auth.getRating(data.game),
+            Number.isFinite(opponentRating) ? opponentRating : ''
+        );
     }
     
     // Setup timer if time limit is set
@@ -1243,74 +1294,79 @@ function findQuickMatch() {
 }
 
 // Rankings
+let rankingsRequestId = 0;
+
 async function loadRankings(game = 'overall') {
     const tbody = Utils.$('#rankings-body');
     if (!tbody) return;
-    
+
+    const requestId = ++rankingsRequestId;
     tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
-    
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     try {
-        // In production, fetch from Firebase
-        const db = firebase.database();
-        let query;
-        
-        if (game === 'overall') {
-            query = db.ref('users').orderByChild('stats/gamesWon').limitToLast(50);
-        } else {
-            query = db.ref('users').orderByChild(`ratings/${game}`).limitToLast(50);
-        }
-        
-        const snapshot = await query.once('value');
-        const users = [];
-        
-        snapshot.forEach(child => {
-            const data = child.val();
-            users.push({
-                name: data.displayName,
-                rating: game === 'overall' ? 
-                    Math.round(Object.values(data.ratings || {}).reduce((a, b) => a + b, 0) / 5) :
-                    data.ratings?.[game] || 1200,
-                wins: data.stats?.gamesWon || 0,
-                losses: data.stats?.gamesLost || 0
-            });
+        const response = await fetch(`/api/leaderboard?game=${encodeURIComponent(game)}`, {
+            signal: controller.signal
         });
-        
-        // Sort and display
-        users.sort((a, b) => b.rating - a.rating);
-        
-        tbody.innerHTML = '';
-        users.slice(0, 50).forEach((user, index) => {
-            const winRate = user.wins + user.losses > 0 ?
-                Math.round((user.wins / (user.wins + user.losses)) * 100) : 0;
-            
-            const tr = Utils.createElement('tr', {}, [
-                Utils.createElement('td', {}, [`#${index + 1}`]),
-                Utils.createElement('td', {}, [user.name]),
-                Utils.createElement('td', {}, [user.rating.toString()]),
-                Utils.createElement('td', {}, [`${user.wins}/${user.losses}`]),
-                Utils.createElement('td', {}, [`${winRate}%`])
-            ]);
-            tbody.appendChild(tr);
-        });
-        
-        // Update podium
-        updatePodium(users.slice(0, 3));
-        
+        if (requestId !== rankingsRequestId) return;
+        if (!response.ok) throw new Error('Failed to load rankings');
+
+        const data = await response.json();
+        renderRankings(Array.isArray(data.players) ? data.players : []);
     } catch (error) {
+        if (requestId !== rankingsRequestId) return;
         console.error('Load rankings error:', error);
-        tbody.innerHTML = '<tr><td colspan="5">Failed to load rankings</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">Could not load rankings</td></tr>';
+        updatePodium([]);
+    } finally {
+        clearTimeout(timeout);
     }
+}
+
+function renderRankings(users) {
+    const tbody = Utils.$('#rankings-body');
+    if (!tbody) return;
+
+    if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="5">No rankings yet</td></tr>';
+        updatePodium([]);
+        return;
+    }
+
+    tbody.innerHTML = '';
+    users.slice(0, 50).forEach((user, index) => {
+        const wins = Number(user.wins) || 0;
+        const losses = Number(user.losses) || 0;
+        const rating = Number(user.rating);
+        const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
+
+        const tr = Utils.createElement('tr', {}, [
+            Utils.createElement('td', {}, [`#${index + 1}`]),
+            Utils.createElement('td', {}, [user.name || 'Player']),
+            Utils.createElement('td', {}, [Number.isFinite(rating) ? String(rating) : '1200']),
+            Utils.createElement('td', {}, [`${wins}/${losses}`]),
+            Utils.createElement('td', {}, [`${winRate}%`])
+        ]);
+        tbody.appendChild(tr);
+    });
+
+    updatePodium(users.slice(0, 3));
 }
 
 function updatePodium(topThree) {
     const positions = ['first', 'second', 'third'];
-    
-    topThree.forEach((user, index) => {
-        const podiumItem = Utils.$(`.podium-item.${positions[index]}`);
-        if (podiumItem) {
-            podiumItem.querySelector('.podium-name').textContent = user?.name || '--';
-            podiumItem.querySelector('.podium-rating').textContent = user?.rating || '--';
-        }
+
+    positions.forEach((position, index) => {
+        const podiumItem = Utils.$(`.podium-item.${position}`);
+        if (!podiumItem) return;
+        const user = topThree[index];
+        const nameEl = podiumItem.querySelector('.podium-name');
+        const ratingEl = podiumItem.querySelector('.podium-rating');
+        const rating = Number(user?.rating);
+        if (nameEl) nameEl.textContent = user?.name || '—';
+        if (ratingEl) ratingEl.textContent = user && Number.isFinite(rating) ? String(rating) : '';
     });
 }
 
@@ -1325,7 +1381,11 @@ Utils.$$('.rankings-tabs .tab-btn')?.forEach(btn => {
 
 // Update stats periodically
 function updateStats() {
-    setInterval(updateOnlineCount, 30000);
+    refreshLiveStats();
+    setInterval(() => {
+        updateOnlineCount();
+        refreshLiveStats();
+    }, 30000);
 }
 
 // Filter buttons in lobby
