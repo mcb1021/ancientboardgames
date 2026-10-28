@@ -1301,7 +1301,8 @@ async function loadRankings(game = 'overall') {
     if (!tbody) return;
 
     const requestId = ++rankingsRequestId;
-    tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5">Loading rankings...</td></tr>';
+    updatePodium(null);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -1314,14 +1315,19 @@ async function loadRankings(game = 'overall') {
         if (!response.ok) throw new Error('Failed to load rankings');
 
         const data = await response.json();
-        renderRankings(Array.isArray(data.players) ? data.players : []);
+        if (requestId !== rankingsRequestId) return;
+        const players = Array.isArray(data?.players) ? data.players : [];
+        renderRankings(players);
     } catch (error) {
         if (requestId !== rankingsRequestId) return;
         console.error('Load rankings error:', error);
         tbody.innerHTML = '<tr><td colspan="5">Could not load rankings</td></tr>';
-        updatePodium([]);
+        updatePodium(null);
     } finally {
         clearTimeout(timeout);
+        if (requestId === rankingsRequestId && (tbody.textContent || '').trim() === 'Loading rankings...') {
+            renderRankings([]);
+        }
     }
 }
 
@@ -1330,7 +1336,7 @@ function renderRankings(users) {
     if (!tbody) return;
 
     if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="5">No rankings yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">No ranked games yet</td></tr>';
         updatePodium([]);
         return;
     }
@@ -1357,15 +1363,21 @@ function renderRankings(users) {
 
 function updatePodium(topThree) {
     const positions = ['first', 'second', 'third'];
+    const list = Array.isArray(topThree) ? topThree : [];
+    const showEmptyCopy = Array.isArray(topThree) && list.length === 0;
 
     positions.forEach((position, index) => {
         const podiumItem = Utils.$(`.podium-item.${position}`);
         if (!podiumItem) return;
-        const user = topThree[index];
+        const user = list[index];
         const nameEl = podiumItem.querySelector('.podium-name');
         const ratingEl = podiumItem.querySelector('.podium-rating');
         const rating = Number(user?.rating);
-        if (nameEl) nameEl.textContent = user?.name || '—';
+        if (nameEl) {
+            if (user) nameEl.textContent = user.name || 'Player';
+            else if (showEmptyCopy && position === 'first') nameEl.textContent = 'No ranked games yet';
+            else nameEl.textContent = '';
+        }
         if (ratingEl) ratingEl.textContent = user && Number.isFinite(rating) ? String(rating) : '';
     });
 }
