@@ -1,0 +1,71 @@
+/* Shared look for /games/* SEO landers.
+   Matches the static pages (about, rules, history, faq): dark ground, gold links. */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    line-height: 1.6;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    background: #1A1610;
+    color: #E8E0D5;
+}
+
+h1 {
+    color: #D4AF37;
+    border-bottom: 2px solid #D4AF37;
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #D4AF37;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #3D3328;
+}
+
+a {
+    color: #D4AF37;
+}
+
+nav {
+    margin-bottom: 8px;
+    color: #B8A888;
+}
+
+.origin {
+    color: #888;
+    font-style: italic;
+    margin-top: 0;
+}
+
+ol,
+ul {
+    margin-left: 20px;
+}
+
+li {
+    margin-bottom: 8px;
+}
+
+a.cta {
+    display: inline-block;
+    margin: 6px 0;
+    padding: 12px 18px;
+    background: #D4AF37;
+    color: #1A1610;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+a.cta:hover {
+    background: #E4C25A;
+}
+
+footer {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid #3D3328;
+    color: #888;
+}

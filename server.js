@@ -768,7 +768,25 @@ const resetDailyStats = () => {
 };
 resetDailyStats();
 
-// Serve index.html for all routes (SPA)
+// SEO landing pages. Must be registered before the SPA catch-all, or
+// /games/* is served as public/index.html and Google never sees this copy.
+const GAME_LANDING_PAGES = {
+    'royal-game-of-ur': 'royal-game-of-ur.html',
+    senet: 'senet.html',
+    hnefatafl: 'hnefatafl.html',
+    'nine-mens-morris': 'nine-mens-morris.html',
+    mancala: 'mancala.html'
+};
+
+app.get('/games/:slug', (req, res, next) => {
+    const file = GAME_LANDING_PAGES[req.params.slug];
+    if (!file) return next();
+    res.sendFile(path.join(__dirname, 'public', 'games', file), (err) => {
+        if (err) next(err);
+    });
+});
+
+// Serve index.html for all other routes (SPA)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
