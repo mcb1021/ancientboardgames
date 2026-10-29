@@ -11,6 +11,7 @@ let turnTimer = null;
 let turnTimeLimit = 60;
 let turnTimeRemaining = 60;
 let currentRoomId = null; // Track current multiplayer room
+let lobbyConnectionFailed = false;
 
 // Game class mapping - with fallback checks
 const GameClasses = {};
@@ -954,7 +955,18 @@ function initSocket() {
         
         socket.on('connect', () => {
             console.log('Connected to game server');
+            lobbyConnectionFailed = false;
             updateOnlineCount();
+            if (currentPage === 'lobby') loadRooms();
+        });
+
+        socket.on('connect_error', () => {
+            lobbyConnectionFailed = true;
+            if (currentPage === 'lobby') renderRoomsUnavailable();
+        });
+
+        socket.on('rooms-list', (rooms) => {
+            renderRooms(Array.isArray(rooms) ? rooms : []);
         });
         
         socket.on('room-created', (data) => {
@@ -1040,23 +1052,49 @@ function updateOnlineCount() {
     }
 }
 
-// 0 is a real count. `||` would turn it into the broken "--" placeholder.
+// A successful /api/stats payload is shown as-is, including 0.
+// A failed request must not invent a count.
+let liveStatsLoaded = false;
+
+function setStatValue(el, value) {
+    if (!el) return;
+    el.classList.remove('is-unavailable');
+    el.textContent = value;
+}
+
+function markStatUnavailable(el) {
+    if (!el) return;
+    el.textContent = 'Unavailable';
+    el.classList.add('is-unavailable');
+}
+
 function applyLiveStats(data) {
     const onlineEl = Utils.$('#online-count');
     const gamesEl = Utils.$('#games-today');
     const online = Number(data?.online);
     const games = Number(data?.gamesToday);
-    if (onlineEl) onlineEl.textContent = Number.isFinite(online) ? String(online) : '0';
-    if (gamesEl) gamesEl.textContent = Number.isFinite(games) ? String(games) : '0';
+    if (!Number.isFinite(online) || !Number.isFinite(games)) {
+        if (!liveStatsLoaded) {
+            markStatUnavailable(onlineEl);
+            markStatUnavailable(gamesEl);
+        }
+        return;
+    }
+    liveStatsLoaded = true;
+    setStatValue(onlineEl, String(online));
+    setStatValue(gamesEl, String(games));
 }
 
 async function refreshLiveStats() {
     try {
         const response = await fetch('/api/stats');
-        if (!response.ok) return;
+        if (!response.ok) throw new Error('stats unavailable');
         applyLiveStats(await response.json());
     } catch (error) {
-        // Keep the last numbers. The page starts at 0, not "--".
+        if (!liveStatsLoaded) {
+            markStatUnavailable(Utils.$('#online-count'));
+            markStatUnavailable(Utils.$('#games-today'));
+        }
     }
 }
 
@@ -1078,41 +1116,95 @@ function showMatchRatings(playerSide, myRating, opponentRating) {
     }
 }
 
+function focusCreateRoom() {
+    const input = Utils.$('#room-name-input');
+    const panel = Utils.$('.lobby-create');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (input) input.focus();
+}
+
+function renderRoomsUnavailable() {
+    const roomsList = Utils.$('#rooms-list');
+    if (!roomsList) return;
+    roomsList.innerHTML = '';
+    roomsList.appendChild(Utils.createElement('li', { class: 'rooms-empty' }, [
+        Utils.createElement('p', { class: 'rooms-empty-title' }, ['Rooms are unavailable']),
+        Utils.createElement('p', {}, ['The lobby did not connect. You can still play the AI.']),
+        Utils.createElement('div', { class: 'rooms-empty-actions' }, [
+            Utils.createElement('button', {
+                class: 'btn-primary',
+                type: 'button',
+                onClick: () => navigateTo('games')
+            }, ['Play the AI'])
+        ])
+    ]));
+}
+
+function renderRoomsEmpty() {
+    const roomsList = Utils.$('#rooms-list');
+    if (!roomsList) return;
+    roomsList.innerHTML = '';
+    roomsList.appendChild(Utils.createElement('li', { class: 'rooms-empty' }, [
+        Utils.createElement('p', { class: 'rooms-empty-title' }, ['No rooms are open']),
+        Utils.createElement('p', {}, ['Play the AI now, or create a room and share the link.']),
+        Utils.createElement('div', { class: 'rooms-empty-actions' }, [
+            Utils.createElement('button', {
+                class: 'btn-primary',
+                type: 'button',
+                onClick: () => navigateTo('games')
+            }, ['Play the AI']),
+            Utils.createElement('button', {
+                class: 'btn-secondary',
+                type: 'button',
+                onClick: focusCreateRoom
+            }, ['Create a room'])
+        ])
+    ]));
+}
+
+function renderRooms(rooms) {
+    const roomsList = Utils.$('#rooms-list');
+    if (!roomsList) return;
+
+    const list = Array.isArray(rooms) ? rooms : [];
+    if (list.length === 0) {
+        renderRoomsEmpty();
+        return;
+    }
+
+    roomsList.innerHTML = '';
+    list.forEach(room => {
+        const timeText = room.timeLimit === 0 ? 'No limit' : `${room.timeLimit}s`;
+        const li = Utils.createElement('li', {}, [
+            Utils.createElement('div', { class: 'room-info' }, [
+                Utils.createElement('span', { class: 'room-name' }, [room.name]),
+                Utils.createElement('span', { class: 'room-game' }, [
+                    (CONFIG.games[room.game]?.name || room.game) + ` • ⏱️ ${timeText}`
+                ])
+            ]),
+            Utils.createElement('button', {
+                class: 'btn-primary btn-small',
+                type: 'button',
+                onClick: () => joinRoom(room.id)
+            }, ['Join'])
+        ]);
+        roomsList.appendChild(li);
+    });
+}
+
 function loadRooms() {
     const roomsList = Utils.$('#rooms-list');
     if (!roomsList) return;
-    
-    // In production, this would fetch from the server
-    roomsList.innerHTML = '<li class="empty-state">No open rooms. Create one!</li>';
-    
-    if (socket && socket.connected) {
-        socket.emit('get-rooms');
-        
-        socket.once('rooms-list', (rooms) => {
-            if (rooms.length === 0) {
-                roomsList.innerHTML = '<li class="empty-state">No open rooms. Create one!</li>';
-                return;
-            }
-            
-            roomsList.innerHTML = '';
-            rooms.forEach(room => {
-                const timeText = room.timeLimit === 0 ? 'No limit' : `${room.timeLimit}s`;
-                const li = Utils.createElement('li', {}, [
-                    Utils.createElement('div', { class: 'room-info' }, [
-                        Utils.createElement('span', { class: 'room-name' }, [room.name]),
-                        Utils.createElement('span', { class: 'room-game' }, [
-                            (CONFIG.games[room.game]?.name || room.game) + ` • ⏱️ ${timeText}`
-                        ])
-                    ]),
-                    Utils.createElement('button', { 
-                        class: 'btn-primary btn-small',
-                        onClick: () => joinRoom(room.id)
-                    }, ['Join'])
-                ]);
-                roomsList.appendChild(li);
-            });
-        });
+
+    if (!socket || lobbyConnectionFailed) {
+        renderRoomsUnavailable();
+        return;
     }
+
+    roomsList.innerHTML = '<li class="rooms-status">Checking for rooms...</li>';
+    if (!socket.connected) return;
+
+    socket.emit('get-rooms');
 }
 
 function createRoom() {
@@ -1301,7 +1393,8 @@ async function loadRankings(game = 'overall') {
     if (!tbody) return;
 
     const requestId = ++rankingsRequestId;
-    tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="rankings-empty-cell">Checking rankings...</td></tr>';
+    updatePodium(null);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -1314,14 +1407,18 @@ async function loadRankings(game = 'overall') {
         if (!response.ok) throw new Error('Failed to load rankings');
 
         const data = await response.json();
-        renderRankings(Array.isArray(data.players) ? data.players : []);
+        const players = Array.isArray(data?.players) ? data.players : [];
+        renderRankings(players);
     } catch (error) {
         if (requestId !== rankingsRequestId) return;
         console.error('Load rankings error:', error);
-        tbody.innerHTML = '<tr><td colspan="5">Could not load rankings</td></tr>';
-        updatePodium([]);
+        tbody.innerHTML = '<tr><td colspan="5" class="rankings-empty-cell">Could not load rankings.</td></tr>';
+        updatePodium(null);
     } finally {
         clearTimeout(timeout);
+        if (requestId === rankingsRequestId && (tbody.textContent || '').trim() === 'Checking rankings...') {
+            renderRankings([]);
+        }
     }
 }
 
@@ -1330,7 +1427,7 @@ function renderRankings(users) {
     if (!tbody) return;
 
     if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="5">No rankings yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="rankings-empty-cell">No ranked games yet.</td></tr>';
         updatePodium([]);
         return;
     }
@@ -1356,17 +1453,32 @@ function renderRankings(users) {
 }
 
 function updatePodium(topThree) {
+    const podium = Utils.$('.rankings-podium');
     const positions = ['first', 'second', 'third'];
+    const list = Array.isArray(topThree) ? topThree : [];
+    const hasPlayers = list.length > 0;
+
+    if (podium) podium.classList.toggle('is-empty', !hasPlayers);
 
     positions.forEach((position, index) => {
         const podiumItem = Utils.$(`.podium-item.${position}`);
         if (!podiumItem) return;
-        const user = topThree[index];
+        const user = list[index];
         const nameEl = podiumItem.querySelector('.podium-name');
         const ratingEl = podiumItem.querySelector('.podium-rating');
         const rating = Number(user?.rating);
-        if (nameEl) nameEl.textContent = user?.name || '—';
-        if (ratingEl) ratingEl.textContent = user && Number.isFinite(rating) ? String(rating) : '';
+
+        if (!user) {
+            podiumItem.classList.add('is-open');
+            if (nameEl) nameEl.textContent = hasPlayers ? 'Open seat' : '';
+            // Keep the rating line so open places line up with filled ones.
+            if (ratingEl) ratingEl.textContent = hasPlayers ? '\u00a0' : '';
+            return;
+        }
+
+        podiumItem.classList.remove('is-open');
+        if (nameEl) nameEl.textContent = user.name || 'Player';
+        if (ratingEl) ratingEl.textContent = Number.isFinite(rating) ? String(rating) : '';
     });
 }
 
