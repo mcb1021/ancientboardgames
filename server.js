@@ -78,6 +78,19 @@ let gamesToday = 0;
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
 app.use(express.json());
+// Registered before static so a directory named public/games cannot 301
+// /games to /games/. /games/ redirects to the hub; /games serves it.
+app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path === '/games/') {
+        return res.redirect(301, '/games');
+    }
+    if (req.path === '/games') {
+        return res.sendFile(path.join(__dirname, 'public', 'games', 'index.html'));
+    }
+    next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================
@@ -786,9 +799,10 @@ app.get('/games/:slug', (req, res, next) => {
     });
 });
 
-// Serve index.html for all other routes (SPA)
+// Unknown paths are real 404s. public/js only reads ?game= and ?room=
+// on "/", so dropping the old catch-all does not break client routing.
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
 
 // Start server

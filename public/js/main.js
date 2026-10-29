@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomParam = Utils.getQueryParam('room');
     
     if (gameParam && GameClasses[gameParam]) {
-        startQuickGame(gameParam);
+        showDifficultyModal(gameParam);
     } else if (roomParam) {
         joinRoom(roomParam);
     }
