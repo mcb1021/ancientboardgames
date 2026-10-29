@@ -24,6 +24,12 @@ h2 {
     border-top: 1px solid #3D3328;
 }
 
+h3 {
+    color: #B8A888;
+    font-size: 1.05rem;
+    margin: 1.25rem 0 0.35rem;
+}
+
 a {
     color: #D4AF37;
 }
