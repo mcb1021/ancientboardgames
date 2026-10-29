@@ -6,6 +6,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 
 // Initialize Express
@@ -78,6 +79,24 @@ let gamesToday = 0;
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
 app.use(express.json());
+// Fill the footer year when the page is served so the copyright cannot go stale.
+function sendHomePage(req, res) {
+    const filePath = path.join(__dirname, 'public', 'index.html');
+    fs.readFile(filePath, 'utf8', (err, html) => {
+        if (err) {
+            console.error('Home page read failed:', err.message);
+            res.status(500).type('text').send('Page unavailable');
+            return;
+        }
+        const year = String(new Date().getFullYear());
+        const body = html.replace(/id="footer-year">[^<]*</, `id="footer-year">${year}<`);
+        res.set('Cache-Control', 'no-cache');
+        res.type('html').send(body);
+    });
+}
+app.get('/', sendHomePage);
+app.get('/index.html', sendHomePage);
+
 // Registered before static so a directory named public/games cannot 301
 // /games to /games/. /games/ redirects to the hub; /games serves it.
 app.use((req, res, next) => {
